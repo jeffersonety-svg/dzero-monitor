@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071710" />
+    <meta name="description" content="Monitor em tempo real da central de triagem de correspondências." />
+    <title>MonitorTriagem</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="monitor" id="monitor">
+      <header class="topbar">
+        <div class="brand" aria-label="MonitorTriagem">
+          <img class="brand-logo" src="/logo.png" alt="" />
+          <div>
+            <p class="brand-kicker">CENTRAL OPERACIONAL</p>
+            <h1>TRIAGEM DE CORRESPONDÊNCIAS</h1>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="connection" id="connection" aria-live="polite">
+            <span class="connection-light" aria-hidden="true"></span>
+            <span id="connectionText">CONECTANDO</span>
+          </div>
+          <div class="clock" aria-label="Data e hora atuais">
+            <strong id="clockTime">--:--:--</strong>
+            <span id="clockDate">--</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="dashboard" id="dashboard">
+        <section class="route-panel" aria-label="Rota da última carta lida" aria-live="assertive">
+          <p class="section-label">ROTA</p>
+          <strong class="route-value" id="rota">--</strong>
+          <div class="route-line" aria-hidden="true"></div>
+          <p class="city" id="cidade">AGUARDANDO LEITURA</p>
+          <p class="location"><span id="uf">--</span><span class="location-separator">•</span><span id="cep">----- ---</span></p>
+        </section>
+
+        <section class="metrics" aria-label="Indicadores da operação">
+          <article class="metric-card">
+            <p class="metric-label">CARTAS HOJE</p>
+            <strong class="metric-value" id="totalHoje">0</strong>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">ÚLTIMA LEITURA</p>
+            <strong class="metric-value metric-time" id="ultimaLeitura">--:--:--</strong>
+          </article>
+        </section>
+      </main>
+
+      <footer class="statusbar" id="statusbar" aria-live="polite">
+        <span class="status-pulse" aria-hidden="true"></span>
+        <strong id="statusText">AGUARDANDO PRÓXIMA CARTA</strong>
+        <span class="status-detail" id="statusDetail">SISTEMA PRONTO</span>
+      </footer>
+    </div>
+
+    <!-- O cliente Socket.IO é entregue pelo próprio servidor, sem bibliotecas de interface. -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/script.js"></script>
+  </body>
+</html>
