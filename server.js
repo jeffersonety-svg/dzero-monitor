@@ -17,6 +17,58 @@ const io = new Server(httpServer, {
 });
 
 let latestState = null;
+let latestCount = 0;
+let latestDate = null;
+let midnightTimer = null;
+
+function getLocalDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function ensureCurrentDay(date = new Date()) {
+  const currentDay = getLocalDateKey(date);
+
+  if (latestDate !== currentDay) {
+    latestDate = currentDay;
+    latestCount = 0;
+  }
+
+  return latestDate;
+}
+
+function scheduleMidnightReset() {
+  clearTimeout(midnightTimer);
+
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const delay = nextMidnight.getTime() - now.getTime();
+
+  midnightTimer = setTimeout(() => {
+    const today = getLocalDateKey(new Date());
+
+    if (latestState && latestDate !== today) {
+      latestDate = today;
+      latestCount = 0;
+      latestState = { ...latestState, totalHoje: 0 };
+      io.emit("novaCarta", latestState);
+    }
+
+    scheduleMidnightReset();
+  }, delay);
+}
+
+function startMidnightReset() {
+  if (midnightTimer) {
+    return;
+  }
+
+  scheduleMidnightReset();
+}
+
+function stopMidnightReset() {
+  clearTimeout(midnightTimer);
+  midnightTimer = null;
+}
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "32kb" }));
@@ -61,13 +113,13 @@ function normalizeUpdate(input) {
   const uf = value("uf", 10).toUpperCase();
   const cep = value("cep", 20);
   const hora = value("hora", 80) || new Date().toISOString();
-  const totalHoje = Number(input.totalHoje);
+  const totalHoje = input.totalHoje === undefined ? undefined : Number(input.totalHoje);
 
   if (!rota || !cidade || !uf || !cep) {
     return { ok: false, error: "Os campos rota, cidade, uf e cep são obrigatórios." };
   }
 
-  if (!Number.isFinite(totalHoje) || totalHoje < 0) {
+  if (input.totalHoje !== undefined && (!Number.isFinite(totalHoje) || totalHoje < 0)) {
     return { ok: false, error: "O campo totalHoje deve ser um número maior ou igual a zero." };
   }
 
@@ -78,8 +130,7 @@ function normalizeUpdate(input) {
       cidade,
       uf,
       cep,
-      hora,
-      totalHoje: Math.trunc(totalHoje)
+      hora
     }
   };
 }
@@ -92,7 +143,14 @@ app.post("/update", (request, response) => {
     return response.status(400).json(result);
   }
 
-  latestState = result.data;
+  const now = new Date();
+  ensureCurrentDay(now);
+  latestCount += 1;
+  latestState = {
+    ...result.data,
+    hora: result.data.hora,
+    totalHoje: latestCount
+  };
   io.emit("novaCarta", latestState);
 
   return response.status(200).json({
@@ -128,6 +186,7 @@ function start(port = Number(process.env.PORT) || DEFAULT_PORT) {
     httpServer.once("error", reject);
     httpServer.listen(port, () => {
       httpServer.off("error", reject);
+      startMidnightReset();
       console.log(`MonitorTriagem em execução em http://localhost:${httpServer.address().port}`);
       resolve(httpServer);
     });
@@ -137,6 +196,7 @@ function start(port = Number(process.env.PORT) || DEFAULT_PORT) {
 /** Fecha conexões Socket.IO e HTTP, usado apenas nos testes automatizados. */
 function stop() {
   return new Promise((resolve) => {
+    stopMidnightReset();
     io.close(() => {
       if (!httpServer.listening) {
         return resolve();

@@ -50,7 +50,7 @@ test("POST /update transmite novaCarta para um cliente Socket.IO", async () => {
     uf: "PR",
     cep: "81520-900",
     hora: "09:35:22",
-    totalHoje: 1528
+    totalHoje: 1
   });
 });
 
