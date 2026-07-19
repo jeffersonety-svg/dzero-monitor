@@ -21,6 +21,9 @@ let latestCount = 0;
 let latestDate = null;
 let midnightTimer = null;
 
+// NOVO
+let routeCounts = {};
+
 function getLocalDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -28,10 +31,13 @@ function getLocalDateKey(date = new Date()) {
 function ensureCurrentDay(date = new Date()) {
   const currentDay = getLocalDateKey(date);
 
-  if (latestDate !== currentDay) {
-    latestDate = currentDay;
-    latestCount = 0;
-  }
+if (latestDate !== currentDay) {
+  latestDate = currentDay;
+  latestCount = 0;
+
+  // Zera as rotas
+  routeCounts = {};
+}
 
   return latestDate;
 }
@@ -47,11 +53,19 @@ function scheduleMidnightReset() {
     const today = getLocalDateKey(new Date());
 
     if (latestState && latestDate !== today) {
-      latestDate = today;
-      latestCount = 0;
-      latestState = { ...latestState, totalHoje: 0 };
-      io.emit("novaCarta", latestState);
-    }
+  latestDate = today;
+  latestCount = 0;
+  routeCounts = {};
+
+  latestState = {
+    ...latestState,
+    totalHoje: 0,
+    rotas: routeCounts,
+    connectedClients: io.engine.clientsCount
+  };
+
+  io.emit("novaCarta", latestState);
+}
 
     scheduleMidnightReset();
   }, delay);
@@ -146,11 +160,21 @@ app.post("/update", (request, response) => {
   const now = new Date();
   ensureCurrentDay(now);
   latestCount += 1;
+  // Soma uma carta para a rota
+routeCounts[result.data.rota] =
+  (routeCounts[result.data.rota] || 0) + 1;
+
   latestState = {
-    ...result.data,
-    hora: result.data.hora,
-    totalHoje: latestCount
-  };
+  ...result.data,
+  hora: result.data.hora,
+  totalHoje: latestCount,
+
+  // NOVO
+  rotas: routeCounts,
+
+  // NOVO
+  connectedClients: io.engine.clientsCount
+};
   io.emit("novaCarta", latestState);
 
   return response.status(200).json({
