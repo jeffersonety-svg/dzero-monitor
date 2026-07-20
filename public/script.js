@@ -3,7 +3,7 @@
 (() => {
   const STORAGE_KEY = "monitor-triagem:last-state";
   const STATUS_TIMEOUT_MS = 2000;
-  const FLASH_DURATION_MS = 800;
+  const FLASH_DURATION_MS = 100;
   const numberFormatter = new Intl.NumberFormat("pt-BR");
 
   const elements = Object.freeze({

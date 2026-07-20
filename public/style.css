@@ -458,27 +458,27 @@ body.pending .monitor {
 .main-card.is-updated,
 .main-panel.is-updated,
 .topbar-chip.is-updated {
-  animation: cardFlash 800ms ease;
+  animation: cardFlash 100ms ease;
 }
 
 .route-value.is-updated {
   animation:
-    routeEntry 800ms cubic-bezier(0.16, 1, 0.3, 1),
-    textGlow 800ms ease;
+    routeEntry 100ms cubic-bezier(0.16, 1, 0.3, 1),
+    textGlow 100ms ease;
   transform-origin: left center;
 }
 
 #cidade.is-updated {
   animation:
-    cityEntry 800ms cubic-bezier(0.16, 1, 0.3, 1),
-    textGlow 800ms ease;
+    cityEntry 100ms cubic-bezier(0.16, 1, 0.3, 1),
+    textGlow 100ms ease;
   transform-origin: left center;
 }
 
 .city-card.is-updated {
   animation:
-    cardFlash 800ms ease,
-    cityPanelLift 800ms cubic-bezier(0.16, 1, 0.3, 1);
+    cardFlash 100ms ease,
+    cityPanelLift 100ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body.pending .route-value,
