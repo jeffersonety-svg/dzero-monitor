@@ -218,9 +218,25 @@
       return null;
     }
 
-    return voices.find((voice) => /^pt(-|_)?BR$/i.test(voice.lang))
-      || voices.find((voice) => /^pt/i.test(voice.lang))
-      || voices[0];
+    const preferredVoices = voices
+      .filter((voice) => /^pt(-|_)?BR$/i.test(voice.lang) || /^pt/i.test(voice.lang))
+      .sort((left, right) => {
+        const score = (voice) => {
+          const name = `${voice.name || ""} ${voice.lang || ""}`.toLowerCase();
+          let total = 0;
+
+          if (voice.localService) total += 3;
+          if (/natural|neural|premium|enhanced|wave/i.test(name)) total += 3;
+          if (/google|microsoft|online|standard/i.test(name)) total += 2;
+          if (/pt-br|portugu[eê]s do brasil|brazil/i.test(name)) total += 2;
+
+          return total;
+        };
+
+        return score(right) - score(left);
+      });
+
+    return preferredVoices[0] || voices[0];
   }
 
   function numberToPortuguese(value) {
@@ -241,8 +257,26 @@
     return unit === 0 ? tens[ten] : `${tens[ten]} e ${units[unit]}`;
   }
 
+  function digitToPortuguese(digit) {
+    return ["zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"][Number(digit)] || digit;
+  }
+
+  function spellDigits(value) {
+    return String(value)
+      .split("")
+      .map((digit) => digitToPortuguese(digit))
+      .join(", ");
+  }
+
   function formatRouteForSpeech(routeValue) {
     const normalized = normalizeText(routeValue, "", 20).replace(/^rota\s*/i, "").trim();
+
+    const letterNumberMatch = normalized.match(/^([A-Za-z])[\s-]*([0-9]+)$/);
+
+    if (letterNumberMatch) {
+      const routeNumber = Number(letterNumberMatch[2]);
+      return `${letterNumberMatch[1].toUpperCase()} ${numberToPortuguese(routeNumber)}`;
+    }
 
     if (!/^\d+$/.test(normalized)) {
       return normalized;
@@ -265,7 +299,10 @@
       return "";
     }
 
-    return `Rota ${routeText}. Cidade ${cityText}.`;
+    return {
+      route: `Rota ${routeText}.`,
+      city: `Cidade ${cityText}.`
+    };
   }
 
   function speakReading(snapshot) {
@@ -285,14 +322,19 @@
     try {
       speech.cancel();
 
-      const utterance = new window.SpeechSynthesisUtterance(announcement);
-      utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
-      utterance.voice = runtimeState.preferredVoice || null;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      utterance.onerror = () => {
-        runtimeState.lastAnnouncementKey = "";
+      const speakPart = (text, delayMs = 0) => {
+        window.setTimeout(() => {
+          const utterance = new window.SpeechSynthesisUtterance(text);
+          utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
+          utterance.voice = runtimeState.preferredVoice || null;
+          utterance.rate = 0.95;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+          utterance.onerror = () => {
+            runtimeState.lastAnnouncementKey = "";
+          };
+          speech.speak(utterance);
+        }, delayMs);
       };
 
       runtimeState.lastAnnouncementKey = announcementKey;
@@ -300,7 +342,8 @@
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          speech.speak(utterance);
+          speakPart(announcement.route, 0);
+          speakPart(announcement.city, 280);
         });
       });
     } catch (_error) {
