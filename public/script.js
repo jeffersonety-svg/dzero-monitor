@@ -299,10 +299,7 @@
       return "";
     }
 
-    return {
-      route: `Rota ${routeText}.`,
-      city: `Cidade ${cityText}.`
-    };
+    return `Rota ${routeText}. Cidade ${cityText}.`;
   }
 
   function speakReading(snapshot) {
@@ -322,19 +319,14 @@
     try {
       speech.cancel();
 
-      const speakPart = (text, delayMs = 0) => {
-        window.setTimeout(() => {
-          const utterance = new window.SpeechSynthesisUtterance(text);
-          utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
-          utterance.voice = runtimeState.preferredVoice || null;
-          utterance.rate = 0.95;
-          utterance.pitch = 1.0;
-          utterance.volume = 1.0;
-          utterance.onerror = () => {
-            runtimeState.lastAnnouncementKey = "";
-          };
-          speech.speak(utterance);
-        }, delayMs);
+      const utterance = new window.SpeechSynthesisUtterance(announcement);
+      utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
+      utterance.voice = runtimeState.preferredVoice || null;
+      utterance.rate = 0.96;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      utterance.onerror = () => {
+        runtimeState.lastAnnouncementKey = "";
       };
 
       runtimeState.lastAnnouncementKey = announcementKey;
@@ -342,8 +334,7 @@
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          speakPart(announcement.route, 0);
-          speakPart(announcement.city, 280);
+          speech.speak(utterance);
         });
       });
     } catch (_error) {
