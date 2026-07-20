@@ -48,6 +48,7 @@
 
   const beep = new Audio("/beep.mp3");
   beep.preload = "auto";
+  const speech = window.speechSynthesis || null;
 
   const state = {
     snapshot: null,
@@ -60,6 +61,8 @@
   let statusTimer = null;
   let connectedSince = null;
   let accumulatedOnlineMs = 0;
+  let flashTimer = null;
+  let preferredVoice = null;
 
   function normalizeText(value, fallback, maxLength) {
     const result = String(value ?? "").trim().slice(0, maxLength);
@@ -219,6 +222,84 @@
         // Alguns navegadores exigem interação do operador para permitir áudio.
       });
     }
+  }
+
+  function selectPreferredVoice() {
+    if (!speech) {
+      return null;
+    }
+
+    const voices = speech.getVoices();
+
+    if (!voices.length) {
+      return null;
+    }
+
+    return voices.find((voice) => /^pt(-|_)?BR$/i.test(voice.lang))
+      || voices.find((voice) => /^pt/i.test(voice.lang))
+      || voices[0];
+  }
+
+  function buildAnnouncement(snapshot) {
+    const rawRouteText = normalizeText(snapshot?.rota, "", 20);
+    const cityText = normalizeText(snapshot?.cidade, "", 80);
+    const routeText = rawRouteText.replace(/^rota\s*/i, "").trim();
+
+    if (!routeText && !cityText) {
+      return "";
+    }
+
+    if (!cityText) {
+      return `Rota ${routeText}`;
+    }
+
+    if (!routeText) {
+      return `Cidade ${cityText}`;
+    }
+
+    return `Rota ${routeText}, cidade ${cityText}`;
+  }
+
+  function speakSnapshot(snapshot) {
+    const announcement = buildAnnouncement(snapshot);
+
+    if (!announcement) {
+      playBeep();
+      return;
+    }
+
+    if (!speech || typeof window.SpeechSynthesisUtterance !== "function") {
+      playBeep();
+      return;
+    }
+
+    preferredVoice = preferredVoice || selectPreferredVoice();
+
+    try {
+      speech.cancel();
+
+      const utterance = new window.SpeechSynthesisUtterance(announcement);
+      utterance.lang = preferredVoice?.lang || "pt-BR";
+      utterance.voice = preferredVoice || null;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      utterance.onerror = () => playBeep();
+      speech.speak(utterance);
+    } catch (_error) {
+      playBeep();
+    }
+  }
+
+  function triggerScreenFlash() {
+    document.body.classList.remove("flash-update");
+    void document.body.offsetWidth;
+    document.body.classList.add("flash-update");
+
+    window.clearTimeout(flashTimer);
+    flashTimer = window.setTimeout(() => {
+      document.body.classList.remove("flash-update");
+    }, 560);
   }
 
   function restartAnimation() {
@@ -407,7 +488,8 @@
     setText("mensagemLeituraCard", elements.mensagemLeituraCard, readingMessage, elements.mensagemLeituraCard.closest(".reading-card"));
 
     restartAnimation();
-    playBeep();
+    triggerScreenFlash();
+    speakSnapshot(snapshot);
     updateFooterStatus(
       pending ? "ROTA PENDENTE - VERIFICAR TRIAGEM" : `ROTA ${snapshot.rota} RECEBIDA`,
       pending ? "ATENÇÃO NECESSÁRIA" : "DADOS ATUALIZADOS"
@@ -495,6 +577,13 @@
     if (savedState.summary) {
       refreshOperationalWidgets();
     }
+  }
+
+  if (speech) {
+    preferredVoice = selectPreferredVoice();
+    speech.addEventListener("voiceschanged", () => {
+      preferredVoice = selectPreferredVoice();
+    });
   }
 
   window.setInterval(updateClock, 1000);
