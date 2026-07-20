@@ -17,72 +17,12 @@ const io = new Server(httpServer, {
 });
 
 let latestState = null;
-let latestCount = 0;
-let latestDate = null;
-let midnightTimer = null;
-
-// NOVO
-let routeCounts = {};
-
-function getLocalDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function ensureCurrentDay(date = new Date()) {
-  const currentDay = getLocalDateKey(date);
-
-if (latestDate !== currentDay) {
-  latestDate = currentDay;
-  latestCount = 0;
-
-  // Zera as rotas
-  routeCounts = {};
-}
-
-  return latestDate;
-}
-
-function scheduleMidnightReset() {
-  clearTimeout(midnightTimer);
-
-  const now = new Date();
-  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const delay = nextMidnight.getTime() - now.getTime();
-
-  midnightTimer = setTimeout(() => {
-    const today = getLocalDateKey(new Date());
-
-    if (latestState && latestDate !== today) {
-  latestDate = today;
-  latestCount = 0;
-  routeCounts = {};
-
-  latestState = {
-    ...latestState,
-    totalHoje: 0,
-    rotas: routeCounts,
-    connectedClients: io.engine.clientsCount
-  };
-
-  io.emit("novaCarta", latestState);
-}
-
-    scheduleMidnightReset();
-  }, delay);
-}
-
-function startMidnightReset() {
-  if (midnightTimer) {
-    return;
-  }
-
-  scheduleMidnightReset();
-}
-
-function stopMidnightReset() {
-  clearTimeout(midnightTimer);
-  midnightTimer = null;
-}
+const operationalState = {
+  startedAt: Date.now(),
+  routes: new Map(),
+  cities: new Map(),
+  ufs: new Map()
+};
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "32kb" }));
@@ -111,6 +51,134 @@ app.use(express.static(path.join(__dirname, "public"), {
   etag: true
 }));
 
+function broadcastConnectedClients() {
+  io.emit("clientesConectados", io.engine.clientsCount);
+}
+
+function normalizeLabel(value, maxLength = 80) {
+  return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function normalizeCount(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
+function normalizeCounterEntries(source) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const entries = [];
+  const pushEntry = (label, value) => {
+    const normalizedLabel = normalizeLabel(label, 80);
+    const normalizedValue = normalizeCount(value);
+
+    if (normalizedLabel && normalizedValue !== null) {
+      entries.push([normalizedLabel, normalizedValue]);
+    }
+  };
+
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      if (Array.isArray(item) && item.length >= 2) {
+        pushEntry(item[0], item[1]);
+        continue;
+      }
+
+      if (item && typeof item === "object") {
+        pushEntry(
+          item.rota ?? item.route ?? item.cidade ?? item.city ?? item.uf ?? item.label ?? item.key ?? item.name,
+          item.total ?? item.count ?? item.value ?? item.quantidade
+        );
+      }
+    }
+  } else {
+    for (const [key, value] of Object.entries(source)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        pushEntry(
+          value.rota ?? value.route ?? value.cidade ?? value.city ?? value.uf ?? value.label ?? key,
+          value.total ?? value.count ?? value.value ?? value.quantidade
+        );
+        continue;
+      }
+
+      pushEntry(key, value);
+    }
+  }
+
+  return entries.length ? entries : null;
+}
+
+function setEntriesFromSnapshot(target, entries) {
+  if (!entries) {
+    return false;
+  }
+
+  target.clear();
+
+  for (const [label, count] of entries) {
+    target.set(label, count);
+  }
+
+  return true;
+}
+
+function incrementCounter(target, label) {
+  const normalizedLabel = normalizeLabel(label, 80);
+
+  if (!normalizedLabel) {
+    return;
+  }
+
+  target.set(normalizedLabel, (target.get(normalizedLabel) || 0) + 1);
+}
+
+function sortCounterEntries(target) {
+  return Array.from(target.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+
+      return left.label.localeCompare(right.label, "pt-BR");
+    });
+}
+
+function buildDashboardStats() {
+  const routeEntries = sortCounterEntries(operationalState.routes);
+  const cityEntries = sortCounterEntries(operationalState.cities);
+  const ufEntries = sortCounterEntries(operationalState.ufs);
+  const totalHoje = latestState ? latestState.totalHoje : 0;
+  const uptimeMinutes = Math.max((Date.now() - operationalState.startedAt) / 60000, 1 / 60);
+  const productionPerMinute = totalHoje / uptimeMinutes;
+  const productionPerHour = productionPerMinute * 60;
+  const lastCarta = latestState
+    ? `${latestState.rota} • ${latestState.cidade}/${latestState.uf}`
+    : "--";
+
+  return {
+    totalHoje,
+    rotasAtivas: routeEntries.length,
+    rotaMaisMovimentada: routeEntries[0]?.label ?? "--",
+    cidadeMaisProcessada: cityEntries[0]?.label ?? "--",
+    ufMaisProcessada: ufEntries[0]?.label ?? "--",
+    ultimaCartaLida: lastCarta,
+    ultimaRotaEnviada: latestState?.rota ?? "--",
+    producaoMediaMinuto: productionPerMinute,
+    producaoHora: productionPerHour,
+    routeEntries,
+    cityEntries,
+    ufEntries,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function broadcastDashboardStats() {
+  io.emit("dashboardStats", buildDashboardStats());
+}
+
 /**
  * Converte e valida o formato aceito pelo endpoint /update.
  * @param {unknown} input Corpo JSON recebido pelo n8n.
@@ -127,13 +195,13 @@ function normalizeUpdate(input) {
   const uf = value("uf", 10).toUpperCase();
   const cep = value("cep", 20);
   const hora = value("hora", 80) || new Date().toISOString();
-  const totalHoje = input.totalHoje === undefined ? undefined : Number(input.totalHoje);
+  const totalHoje = Number(input.totalHoje);
 
   if (!rota || !cidade || !uf || !cep) {
     return { ok: false, error: "Os campos rota, cidade, uf e cep são obrigatórios." };
   }
 
-  if (input.totalHoje !== undefined && (!Number.isFinite(totalHoje) || totalHoje < 0)) {
+  if (!Number.isFinite(totalHoje) || totalHoje < 0) {
     return { ok: false, error: "O campo totalHoje deve ser um número maior ou igual a zero." };
   }
 
@@ -144,9 +212,28 @@ function normalizeUpdate(input) {
       cidade,
       uf,
       cep,
-      hora
+      hora,
+      totalHoje: Math.trunc(totalHoje)
     }
   };
+}
+
+function updateOperationalState(normalized, rawInput) {
+  const routeSnapshot = normalizeCounterEntries(rawInput.contadorPorRota);
+  const citySnapshot = normalizeCounterEntries(rawInput.contadorPorCidade);
+  const ufSnapshot = normalizeCounterEntries(rawInput.contadorPorUF);
+
+  if (!setEntriesFromSnapshot(operationalState.routes, routeSnapshot)) {
+    incrementCounter(operationalState.routes, normalized.rota);
+  }
+
+  if (!setEntriesFromSnapshot(operationalState.cities, citySnapshot)) {
+    incrementCounter(operationalState.cities, normalized.cidade);
+  }
+
+  if (!setEntriesFromSnapshot(operationalState.ufs, ufSnapshot)) {
+    incrementCounter(operationalState.ufs, normalized.uf);
+  }
 }
 
 // Recebe a carta processada pelo fluxo do n8n e publica para todos os monitores.
@@ -154,28 +241,15 @@ app.post("/update", (request, response) => {
   const result = normalizeUpdate(request.body);
 
   if (!result.ok) {
+    console.warn(`[HTTP] /update rejeitado: ${result.error}`);
     return response.status(400).json(result);
   }
 
-  const now = new Date();
-  ensureCurrentDay(now);
-  latestCount += 1;
-  // Soma uma carta para a rota
-routeCounts[result.data.rota] =
-  (routeCounts[result.data.rota] || 0) + 1;
-
-  latestState = {
-  ...result.data,
-  hora: result.data.hora,
-  totalHoje: latestCount,
-
-  // NOVO
-  rotas: routeCounts,
-
-  // NOVO
-  connectedClients: io.engine.clientsCount
-};
+  latestState = result.data;
+  updateOperationalState(latestState, request.body);
   io.emit("novaCarta", latestState);
+  broadcastDashboardStats();
+  console.info(`[HTTP] /update aceito - rota ${latestState.rota}, cidade ${latestState.cidade}, total ${latestState.totalHoje}`);
 
   return response.status(200).json({
     ok: true,
@@ -194,6 +268,14 @@ io.on("connection", (socket) => {
   if (latestState) {
     socket.emit("estadoAtual", latestState);
   }
+
+  socket.emit("clientesConectados", io.engine.clientsCount);
+  socket.emit("dashboardStats", buildDashboardStats());
+  broadcastConnectedClients();
+
+  socket.on("disconnect", () => {
+    broadcastConnectedClients();
+  });
 });
 
 /**
@@ -210,7 +292,6 @@ function start(port = Number(process.env.PORT) || DEFAULT_PORT) {
     httpServer.once("error", reject);
     httpServer.listen(port, () => {
       httpServer.off("error", reject);
-      startMidnightReset();
       console.log(`MonitorTriagem em execução em http://localhost:${httpServer.address().port}`);
       resolve(httpServer);
     });
@@ -220,7 +301,6 @@ function start(port = Number(process.env.PORT) || DEFAULT_PORT) {
 /** Fecha conexões Socket.IO e HTTP, usado apenas nos testes automatizados. */
 function stop() {
   return new Promise((resolve) => {
-    stopMidnightReset();
     io.close(() => {
       if (!httpServer.listening) {
         return resolve();
@@ -236,5 +316,17 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
+
+app.use((error, _request, response, next) => {
+  if (response.headersSent) {
+    return next(error);
+  }
+
+  console.error("Erro inesperado no MonitorTriagem:", error);
+  return response.status(500).json({
+    ok: false,
+    error: "Erro interno ao processar a requisição."
+  });
+});
 
 module.exports = { app, httpServer, io, normalizeUpdate, start, stop };

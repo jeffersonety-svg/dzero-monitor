@@ -5,142 +5,164 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#071710" />
     <meta name="description" content="Monitor em tempo real da central de triagem de correspondências." />
-    <title>MONITOR TRIAGEM 2.0</title>
+    <title>MonitorTriagem</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <div class="monitor" id="monitor">
       <header class="topbar">
-        <div class="brand" aria-label="Monitor Triagem 2.0">
-          <img class="brand-logo" src="/logo.png" alt="Logo da Central" />
-          <div class="brand-info">
+        <div class="brand" aria-label="MonitorTriagem">
+          <img class="brand-logo" src="/logo.png" alt="" />
+          <div>
             <p class="brand-kicker">CENTRAL OPERACIONAL</p>
-            <h1>TRIAGEM DE CORRESPONDÊNCIAS</h1>
-            <p class="brand-subtitle">MONITOR TRIAGEM 2.0</p>
+            <h1>MONITOR TRIAGEM 2.0</h1>
           </div>
         </div>
 
-        <div class="topbar-right">
-          <div class="clock" aria-label="Data e hora atuais">
-            <strong id="clockTime">--:--:--</strong>
-            <span id="clockDate">--</span>
-          </div>
-          <div class="connection" id="connection" aria-live="polite">
+        <div class="topbar-metrics" aria-label="Indicadores rápidos">
+          <div class="topbar-chip connection" id="connection" aria-live="polite">
             <span class="connection-light" aria-hidden="true"></span>
-            <span id="connectionText">CONECTANDO</span>
+            <span id="connectionText">ONLINE</span>
+          </div>
+          <div class="topbar-chip">
+            <span class="topbar-chip-label">DATA</span>
+            <strong id="topbarDate">--/--/----</strong>
+          </div>
+          <div class="topbar-chip">
+            <span class="topbar-chip-label">HORA</span>
+            <strong id="topbarTime">--:--:--</strong>
+          </div>
+          <div class="topbar-chip">
+            <span class="topbar-chip-label">CARTAS HOJE</span>
+            <strong id="topbarTotalHoje">0</strong>
+          </div>
+          <div class="topbar-chip">
+            <span class="topbar-chip-label">ROTAS ATIVAS</span>
+            <strong id="topbarRotasAtivas">0</strong>
+          </div>
+          <div class="topbar-chip">
+            <span class="topbar-chip-label">PRODUÇÃO/MIN</span>
+            <strong id="topbarProducaoMinuto">0</strong>
           </div>
         </div>
       </header>
 
       <main class="dashboard" id="dashboard">
-        <section class="hero-section">
-          <article class="route-panel" aria-label="Rota da última carta lida" aria-live="assertive">
-            <p class="section-label">ROTA</p>
-            <strong class="route-value" id="rota">--</strong>
-            <div class="route-line"></div>
-            <p class="city" id="cidade">AGUARDANDO LEITURA</p>
-            <p class="location"><span id="uf">--</span><span class="location-separator">•</span><span id="cep">----- ---</span></p>
-            <p class="route-time">HORA <strong id="hora">--:--:--</strong></p>
-          </article>
-
-          <section class="metrics-grid" aria-label="Painel de indicadores">
-            <article class="metric-card" id="cardTotalHoje">
-              <span class="card-icon icon-mail" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Cartas Hoje</p>
-                <strong class="card-value" id="totalHoje">0</strong>
+        <section class="dashboard-main" aria-label="Painel principal">
+          <section class="route-panel" aria-label="Painel principal da rota atual" aria-live="assertive">
+            <div class="panel-head">
+              <div>
+                <p class="section-label">PAINEL PRINCIPAL</p>
+                <h2>ROTA ATUAL</h2>
               </div>
-            </article>
-
-            <article class="metric-card" id="cardLastRead">
-              <span class="card-icon icon-clock" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Última Leitura</p>
-                <strong class="card-value" id="ultimaLeitura">--:--:--</strong>
+              <div class="status-pill">
+                <span class="status-pill-label">STATUS DA LEITURA</span>
+                <strong id="statusLeitura">AGUARDANDO LEITURA</strong>
               </div>
-            </article>
+            </div>
 
-            <article class="metric-card" id="cardClients">
-              <span class="card-icon icon-users" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Clientes Conectados</p>
-                <strong class="card-value" id="connectedClients">0</strong>
-              </div>
-            </article>
+            <div class="route-hero">
+              <strong class="route-value" id="rota">--</strong>
+              <p class="route-message">
+                <span class="route-message-label">Mensagem</span>
+                <strong id="mensagemLeitura">AGUARDANDO LEITURA</strong>
+              </p>
+            </div>
 
-            <article class="metric-card" id="cardOnlineTime">
-              <span class="card-icon icon-timer" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Tempo Online</p>
-                <strong class="card-value" id="timeOnline">00:00:00</strong>
-              </div>
-            </article>
+            <div class="route-grid" aria-label="Dados da leitura atual">
+              <article class="route-field">
+                <span class="route-field-label">CEP</span>
+                <strong class="route-field-value" id="cep">----- ---</strong>
+              </article>
+              <article class="route-field">
+                <span class="route-field-label">Cidade</span>
+                <strong class="route-field-value" id="cidade">AGUARDANDO LEITURA</strong>
+              </article>
+              <article class="route-field">
+                <span class="route-field-label">UF</span>
+                <strong class="route-field-value" id="uf">--</strong>
+              </article>
+            </div>
 
-            <article class="metric-card" id="cardCardsPerMinute">
-              <span class="card-icon icon-chart" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Cartas por Minuto</p>
-                <strong class="card-value" id="cardsPerMinute">0</strong>
-              </div>
-            </article>
+            <div class="reading-grid" aria-label="Resumo da leitura">
+              <article class="reading-card">
+                <span class="reading-card-label">Status da leitura</span>
+                <strong class="reading-card-value" id="statusLeituraCard">AGUARDANDO LEITURA</strong>
+              </article>
+              <article class="reading-card">
+                <span class="reading-card-label">Mensagem</span>
+                <strong class="reading-card-value" id="mensagemLeituraCard">AGUARDANDO LEITURA</strong>
+              </article>
+              <article class="reading-card">
+                <span class="reading-card-label">Última leitura</span>
+                <strong class="reading-card-value" id="ultimaLeitura">--</strong>
+              </article>
+              <article class="reading-card">
+                <span class="reading-card-label">Hora da última leitura</span>
+                <strong class="reading-card-value" id="horaUltimaLeitura">--:--:--</strong>
+              </article>
+            </div>
+          </section>
 
-            <article class="metric-card" id="cardServerStatus">
-              <span class="card-icon icon-server" aria-hidden="true"></span>
-              <div class="card-content">
-                <p class="card-label">Status do Servidor</p>
-                <strong class="card-value" id="serverStatus">CONECTANDO</strong>
+          <section class="processing-panel" aria-label="Processamento das rotas">
+            <div class="panel-head">
+              <div>
+                <p class="section-label">PROCESSAMENTO DAS ROTAS</p>
+                <h2>Ranking em tempo real</h2>
               </div>
-            </article>
+              <div class="processing-pill">
+                <span class="processing-pill-label">ROTAS ATIVAS</span>
+                <strong id="rotasAtivasPanel">0</strong>
+              </div>
+            </div>
+            <div class="processing-note">Ordenado automaticamente da maior produção para a menor.</div>
+            <div class="route-chart" id="routeProcessingChart" aria-live="polite"></div>
           </section>
         </section>
 
-        <section class="panels-grid">
-          <article class="routes-panel">
-            <div class="panel-header">
-              <h2>ROTAS</h2>
-              <p>Contagem ativa por rota</p>
-            </div>
-            <div class="routes-grid" id="routesGrid"></div>
+        <aside class="stats-sidebar" aria-label="Estatísticas operacionais">
+          <article class="stat-card">
+            <span class="stat-label">Total de cartas hoje</span>
+            <strong class="stat-value" id="totalHojeCard">0</strong>
           </article>
-
-          <article class="side-panel">
-            <section class="chart-panel">
-              <div class="panel-header">
-                <h2>PRODUÇÃO POR MINUTO</h2>
-                <p>Últimos 10 minutos</p>
-              </div>
-              <canvas id="chartCanvas" width="600" height="280" aria-label="Gráfico de produção por minuto"></canvas>
-            </section>
-
-            <section class="history-panel">
-              <div class="panel-header">
-                <h2>HISTÓRICO</h2>
-                <p>Últimas 10 cartas</p>
-              </div>
-              <div class="history-controls">
-              <label for="routeFilter">Filtrar rota</label>
-              <select id="routeFilter">
-                <option value="">Todas</option>
-              </select>
-            </div>
-            <div class="history-table-wrapper">
-                <table class="history-table" aria-label="Histórico de cartas">
-                  <thead>
-                    <tr>
-                      <th>Hora</th>
-                      <th>CEP</th>
-                      <th>Cidade</th>
-                      <th>UF</th>
-                      <th>Rota</th>
-                    </tr>
-                  </thead>
-                  <tbody id="historyBody"></tbody>
-                </table>
-              </div>
-            </section>
+          <article class="stat-card">
+            <span class="stat-label">Quantidade de rotas utilizadas</span>
+            <strong class="stat-value" id="rotasAtivasCard">0</strong>
           </article>
-        </section>
+          <article class="stat-card">
+            <span class="stat-label">Rota mais movimentada</span>
+            <strong class="stat-value" id="rotaMaisMovimentada">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Cidade mais processada</span>
+            <strong class="stat-value" id="cidadeMaisProcessada">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">UF mais processada</span>
+            <strong class="stat-value" id="ufMaisProcessada">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Última carta lida</span>
+            <strong class="stat-value" id="ultimaCartaLidaCard">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Última rota enviada</span>
+            <strong class="stat-value" id="ultimaRotaEnviadaCard">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Produção média/minuto</span>
+            <strong class="stat-value" id="producaoMediaMinutoCard">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Produção/hora</span>
+            <strong class="stat-value" id="producaoHoraCard">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Tempo online</span>
+            <strong class="stat-value" id="tempoOnlineCard">--:--:--</strong>
+          </article>
+        </aside>
       </main>
 
       <footer class="statusbar" id="statusbar" aria-live="polite">

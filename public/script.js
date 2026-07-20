@@ -1,493 +1,504 @@
-﻿"use strict";
+"use strict";
 
-const STORAGE_KEY = "monitor-triagem:last-state";
-const DISPLAY_DURATION_MS = 2000;
-const numberFormatter = new Intl.NumberFormat("pt-BR");
-
-const elements = Object.freeze({
-  dashboard: document.getElementById("dashboard"),
-  rota: document.getElementById("rota"),
-  cidade: document.getElementById("cidade"),
-  uf: document.getElementById("uf"),
-  cep: document.getElementById("cep"),
-  hora: document.getElementById("hora"),
-  totalHoje: document.getElementById("totalHoje"),
-  ultimaLeitura: document.getElementById("ultimaLeitura"),
-  clockTime: document.getElementById("clockTime"),
-  clockDate: document.getElementById("clockDate"),
-  connection: document.getElementById("connection"),
-  connectionText: document.getElementById("connectionText"),
-  statusText: document.getElementById("statusText"),
-  statusDetail: document.getElementById("statusDetail"),
-  serverStatus: document.getElementById("serverStatus"),
-  connectedClients: document.getElementById("connectedClients"),
-  timeOnline: document.getElementById("timeOnline"),
-  cardsPerMinute: document.getElementById("cardsPerMinute"),
-  routesGrid: document.getElementById("routesGrid"),
-  routeFilter: document.getElementById("routeFilter"),
-  historyBody: document.getElementById("historyBody"),
-  chartCanvas: document.getElementById("chartCanvas")
-});
-
-const beep = new Audio("/beep.mp3");
-beep.preload = "auto";
-
-let statusTimer = null;
-let productionPerMinute = [];
-let historyEntries = [];
-let chartContext = null;
-const connectedAt = new Date();
-
-function text(value, fallback, maxLength) {
-  const result = String(value ?? "").trim().slice(0, maxLength);
-  return result || fallback;
-}
-
-function formatTime(value) {
-  const raw = text(value, "", 80);
-  const timeMatch = raw.match(/(\d{2}:\d{2}(?::\d{2})?)/);
-
-  if (timeMatch) {
-    return timeMatch[1].length === 5 ? `${timeMatch[1]}:00` : timeMatch[1];
-  }
-
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime())
-    ? new Date().toLocaleTimeString("pt-BR", { hour12: false })
-    : date.toLocaleTimeString("pt-BR", { hour12: false });
-}
-
-function updateClock() {
-  const now = new Date();
-  elements.clockTime.textContent = now.toLocaleTimeString("pt-BR", { hour12: false });
-  elements.clockDate.textContent = now.toLocaleDateString("pt-BR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).replace(".", "").toUpperCase();
-}
-
-function formatDuration(milliseconds) {
-  const seconds = Math.floor(milliseconds / 1000);
-  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const secs = String(seconds % 60).padStart(2, "0");
-  return `${hours}:${minutes}:${secs}`;
-}
-
-function updateOnlineTime() {
-  elements.timeOnline.textContent = formatDuration(Date.now() - connectedAt.getTime());
-}
-
-function getSortedRouteKeys(counts) {
-  if (!counts || typeof counts !== "object") {
-    return [];
-  }
-
-  return Object.keys(counts)
-    .filter((route) => route != null && String(route).trim().length > 0)
-    .sort((a, b) => String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" }));
-}
-
-function createRouteCard(routeName, count) {
-  const card = document.createElement("div");
-  card.className = "route-box";
-  card.dataset.route = routeName;
-  card.innerHTML = `
-    <span>${routeName}</span>
-    <strong>${numberFormatter.format(count)}</strong>
-  `;
-  return card;
-}
-
-function getRouteCard(routeName) {
-  return elements.routesGrid.querySelector(`.route-box[data-route="${CSS.escape(routeName)}"]`);
-}
-
-function updateRouteCards(counts) {
-  const sortedRoutes = getSortedRouteKeys(counts);
-  const existingCards = Array.from(elements.routesGrid.querySelectorAll(".route-box"));
-  const existingByRoute = new Map(existingCards.map((card) => [card.dataset.route, card]));
-
-  sortedRoutes.forEach((routeName) => {
-    const count = Number(counts[routeName]) || 0;
-    const card = existingByRoute.get(routeName);
-
-    if (card) {
-      const valueElement = card.querySelector("strong");
-      const currentValue = Number(valueElement.textContent.replace(/\D/g, "")) || 0;
-      if (count !== currentValue) {
-        valueElement.textContent = numberFormatter.format(count);
-        card.classList.add("route-update");
-        window.setTimeout(() => card.classList.remove("route-update"), 800);
-      }
-      existingByRoute.delete(routeName);
-      return;
-    }
-
-    const newCard = createRouteCard(routeName, count);
-    elements.routesGrid.appendChild(newCard);
+(() => {
+  const STORAGE_KEY = "monitor-triagem:last-state";
+  const DISPLAY_DURATION_MS = 2000;
+  const numberFormatter = new Intl.NumberFormat("pt-BR");
+  const rateFormatter = new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
   });
 
-  existingByRoute.forEach((card) => {
-    card.remove();
+  const elements = Object.freeze({
+    dashboard: document.getElementById("dashboard"),
+    routePanel: document.querySelector(".route-panel"),
+    processingPanel: document.querySelector(".processing-panel"),
+    routeChart: document.getElementById("routeProcessingChart"),
+    rota: document.getElementById("rota"),
+    cep: document.getElementById("cep"),
+    cidade: document.getElementById("cidade"),
+    uf: document.getElementById("uf"),
+    statusLeitura: document.getElementById("statusLeitura"),
+    mensagemLeitura: document.getElementById("mensagemLeitura"),
+    statusLeituraCard: document.getElementById("statusLeituraCard"),
+    mensagemLeituraCard: document.getElementById("mensagemLeituraCard"),
+    ultimaLeitura: document.getElementById("ultimaLeitura"),
+    horaUltimaLeitura: document.getElementById("horaUltimaLeitura"),
+    topbarDate: document.getElementById("topbarDate"),
+    topbarTime: document.getElementById("topbarTime"),
+    topbarTotalHoje: document.getElementById("topbarTotalHoje"),
+    topbarRotasAtivas: document.getElementById("topbarRotasAtivas"),
+    topbarProducaoMinuto: document.getElementById("topbarProducaoMinuto"),
+    rotasAtivasPanel: document.getElementById("rotasAtivasPanel"),
+    totalHojeCard: document.getElementById("totalHojeCard"),
+    rotasAtivasCard: document.getElementById("rotasAtivasCard"),
+    rotaMaisMovimentada: document.getElementById("rotaMaisMovimentada"),
+    cidadeMaisProcessada: document.getElementById("cidadeMaisProcessada"),
+    ufMaisProcessada: document.getElementById("ufMaisProcessada"),
+    ultimaCartaLidaCard: document.getElementById("ultimaCartaLidaCard"),
+    ultimaRotaEnviadaCard: document.getElementById("ultimaRotaEnviadaCard"),
+    producaoMediaMinutoCard: document.getElementById("producaoMediaMinutoCard"),
+    producaoHoraCard: document.getElementById("producaoHoraCard"),
+    tempoOnlineCard: document.getElementById("tempoOnlineCard"),
+    connection: document.getElementById("connection"),
+    connectionText: document.getElementById("connectionText"),
+    statusText: document.getElementById("statusText"),
+    statusDetail: document.getElementById("statusDetail")
   });
 
-  updateRouteFilter(sortedRoutes);
-}
+  const beep = new Audio("/beep.mp3");
+  beep.preload = "auto";
 
-function addHistoryEntry(carta) {
-  historyEntries.unshift({
-    hora: carta.hora,
-    cep: carta.cep,
-    cidade: carta.cidade,
-    uf: carta.uf,
-    rota: carta.rota
-  });
-
-  if (historyEntries.length > 10) {
-    historyEntries.length = 10;
-  }
-
-  renderHistory();
-}
-
-function getFilteredHistory() {
-  const filterValue = elements.routeFilter?.value || "";
-  if (!filterValue) {
-    return historyEntries;
-  }
-
-  return historyEntries.filter((entry) => entry.rota === filterValue);
-}
-
-function renderHistory() {
-  const rows = getFilteredHistory()
-    .map(
-      (entry) => `
-        <tr>
-          <td>${entry.hora}</td>
-          <td>${entry.cep}</td>
-          <td>${entry.cidade}</td>
-          <td>${entry.uf}</td>
-          <td>${entry.rota}</td>
-        </tr>
-      `
-    )
-    .join("");
-
-  elements.historyBody.innerHTML = rows;
-}
-
-function populateRouteFilter(routes = []) {
-  if (!elements.routeFilter) {
-    return;
-  }
-
-  const options = ["", ...routes];
-  elements.routeFilter.innerHTML = options
-    .map((route) => `
-      <option value="${route}">${route || "Todas"}</option>
-    `)
-    .join("");
-
-  if (!elements.routeFilter.hasAttribute("data-listener")) {
-    elements.routeFilter.addEventListener("change", renderHistory);
-    elements.routeFilter.setAttribute("data-listener", "true");
-  }
-}
-
-function updateProductionData(currentMinute, restored) {
-  if (restored) {
-    return Number(elements.cardsPerMinute.textContent) || 0;
-  }
-
-  const minuteLabel = currentMinute || formatTime();
-  const point = productionPerMinute[productionPerMinute.length - 1];
-
-  if (point && point.label === minuteLabel) {
-    point.count += 1;
-  } else {
-    productionPerMinute.push({ label: minuteLabel, count: 1 });
-  }
-
-  if (productionPerMinute.length > 10) {
-    productionPerMinute.shift();
-  }
-
-  const currentCount = productionPerMinute[productionPerMinute.length - 1]?.count || 0;
-  elements.cardsPerMinute.textContent = String(currentCount);
-  return currentCount;
-}
-
-function drawProductionChart() {
-  if (!chartContext) {
-    return;
-  }
-
-  const canvas = elements.chartCanvas;
-  const rect = canvas.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
-
-  chartContext.clearRect(0, 0, width, height);
-  chartContext.save();
-
-  const data = productionPerMinute.slice(-10);
-  if (data.length === 0) {
-    chartContext.fillStyle = "rgba(255, 255, 255, 0.16)";
-    chartContext.font = "600 14px Inter, Arial, sans-serif";
-    chartContext.fillText("Aguardando primeiros dados...", 18, height / 2);
-    chartContext.restore();
-    return;
-  }
-
-  const maxCount = Math.max(...data.map((item) => item.count), 1);
-  const padding = 24;
-  const labelPadding = 28;
-  const availableWidth = width - padding * 2;
-  const availableHeight = height - padding * 2 - labelPadding;
-  const barWidth = Math.max(18, Math.floor(availableWidth / data.length) - 14);
-
-  chartContext.strokeStyle = "rgba(255,255,255,0.08)";
-  chartContext.lineWidth = 1;
-  for (let i = 0; i <= 4; i += 1) {
-    const y = padding + (availableHeight / 4) * i;
-    chartContext.beginPath();
-    chartContext.moveTo(padding, y);
-    chartContext.lineTo(width - padding, y);
-    chartContext.stroke();
-  }
-
-  data.forEach((point, index) => {
-    const x = padding + index * (barWidth + 14);
-    const ratio = point.count / maxCount;
-    const barHeight = Math.max(4, ratio * availableHeight);
-    const y = padding + availableHeight - barHeight;
-
-    const gradient = chartContext.createLinearGradient(0, y, 0, y + barHeight);
-    gradient.addColorStop(0, "rgba(49, 237, 139, 0.95)");
-    gradient.addColorStop(1, "rgba(49, 237, 139, 0.28)");
-
-    chartContext.fillStyle = gradient;
-    chartContext.fillRect(x, y, barWidth, barHeight);
-    chartContext.shadowColor = "rgba(49, 237, 139, 0.2)";
-    chartContext.shadowBlur = 16;
-    chartContext.fillRect(x, y, barWidth, barHeight);
-    chartContext.shadowBlur = 0;
-
-    chartContext.fillStyle = "#ffffff";
-    chartContext.font = "600 12px Inter, Arial, sans-serif";
-    chartContext.textAlign = "center";
-    chartContext.fillText(point.count, x + barWidth / 2, y - 10);
-
-    chartContext.fillStyle = "rgba(171, 255, 211, 0.82)";
-    chartContext.fillText(point.label, x + barWidth / 2, padding + availableHeight + 22);
-  });
-
-  chartContext.restore();
-}
-
-function resizeChart() {
-  const canvas = elements.chartCanvas;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(rect.width * dpr);
-  canvas.height = Math.floor(rect.height * dpr);
-  chartContext = canvas.getContext("2d");
-  chartContext.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawProductionChart();
-}
-
-function applyCarta(data, { restored = false } = {}) {
-  const carta = {
-    rota: text(data?.rota, "--", 20),
-    cidade: text(data?.cidade, "AGUARDANDO LEITURA", 80),
-    uf: text(data?.uf, "--", 10).toUpperCase(),
-    cep: text(data?.cep, "----- ---", 20),
-    hora: formatTime(data?.hora),
-    totalHoje: Math.max(0, Math.trunc(Number(data?.totalHoje) || 0)),
-    rotas: data?.rotas || {},
-    connectedClients: Number(data?.connectedClients) || 0
+  const state = {
+    snapshot: null,
+    summary: null,
+    routeChartSignature: ""
   };
-  const pending = carta.rota.toUpperCase() === "PENDENTE";
 
-  elements.rota.textContent = carta.rota;
-  elements.cidade.textContent = carta.cidade;
-  elements.uf.textContent = carta.uf;
-  elements.cep.textContent = carta.cep;
-  elements.hora.textContent = carta.hora;
-  elements.ultimaLeitura.textContent = carta.hora;
-  elements.totalHoje.textContent = numberFormatter.format(carta.totalHoje);
-  elements.connectedClients.textContent = String(carta.connectedClients);
+  const viewState = Object.create(null);
+  let socket = null;
+  let statusTimer = null;
+  let connectedSince = null;
+  let accumulatedOnlineMs = 0;
 
-  updateRouteCards(carta.rotas);
-  addHistoryEntry(carta);
-  carta.cardsPerMinute = updateProductionData(carta.hora, restored);
-  drawProductionChart();
-  hydrateMetrics(carta, restored);
-
-  document.body.classList.toggle("pending", pending);
-  persistState(carta);
-
-  if (restored) {
-    setStatus("AGUARDANDO PRÓXIMA CARTA", "ÚLTIMA LEITURA RECUPERADA");
-    return;
+  function normalizeText(value, fallback, maxLength) {
+    const result = String(value ?? "").trim().slice(0, maxLength);
+    return result || fallback;
   }
 
-  restartAnimation();
-  notifyArrival(`Nova rota ${carta.rota} carregada`);
-  clearTimeout(statusTimer);
-  setStatus(
-    pending ? "ROTA PENDENTE — VERIFICAR TRIAGEM" : `ROTA ${carta.rota} RECEBIDA`,
-    pending ? "ATENÇÃO NECESSÁRIA" : "DADOS ATUALIZADOS"
-  );
-
-  statusTimer = window.setTimeout(() => {
-    setStatus("AGUARDANDO PRÓXIMA CARTA", pending ? "PENDÊNCIA EM EXIBIÇÃO" : "SISTEMA PRONTO");
-  }, DISPLAY_DURATION_MS);
-}
-
-function setConnection(state) {
-  elements.connection.classList.remove("is-online", "is-offline");
-
-  if (state === "online") {
-    elements.connection.classList.add("is-online");
-    elements.connectionText.textContent = "ONLINE";
-    elements.statusDetail.textContent = "CONEXÃO ATIVA";
-    elements.serverStatus.textContent = "ONLINE";
-    return;
+  function normalizeNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
   }
 
-  if (state === "offline") {
-    elements.connection.classList.add("is-offline");
-    elements.connectionText.textContent = "DESCONECTADO";
-    elements.statusDetail.textContent = "RECONEXÃO AUTOMÁTICA";
-    elements.serverStatus.textContent = "OFFLINE";
-    return;
+  function formatDateTime(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "--:--:--"
+      : date.toLocaleTimeString("pt-BR", { hour12: false });
   }
 
-  elements.connectionText.textContent = "CONECTANDO";
-  elements.statusDetail.textContent = "CONECTANDO AO SERVIDOR";
-  elements.serverStatus.textContent = "CONECTANDO";
-}
-
-function setStatus(message, detail) {
-  elements.statusText.textContent = message;
-  elements.statusDetail.textContent = detail;
-}
-
-function playBeep() {
-  beep.pause();
-  beep.currentTime = 0;
-  const playPromise = beep.play();
-
-  if (playPromise) {
-    playPromise.catch(() => {
-      // Autoplay pode ser bloqueado até haver interação do usuário.
-    });
-  }
-}
-
-function notifyArrival(message) {
-  if (window.speechSynthesis && typeof window.speechSynthesis.speak === "function") {
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = "pt-BR";
-    utterance.rate = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    return;
+  function formatDate(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "--/--/----"
+      : date.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric"
+        });
   }
 
-  playBeep();
-}
+  function formatDuration(milliseconds) {
+    const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
 
-function persistState(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (_error) {
-    // Continua funcionando mesmo se o armazenamento estiver indisponível.
-  }
-}
-
-function restoreState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function restartAnimation() {
-  elements.dashboard.classList.remove("update-animation");
-  void elements.dashboard.offsetWidth;
-  elements.dashboard.classList.add("update-animation");
-}
-
-function animateMetricCard(element) {
-  if (!element) {
-    return;
+    return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
   }
 
-  element.classList.add("active-change");
-  window.setTimeout(() => element.classList.remove("active-change"), 900);
-}
-
-function hydrateMetrics(carta, restored) {
-  if (!elements.totalHoje || !elements.ultimaLeitura || !elements.connectedClients || !elements.timeOnline || !elements.cardsPerMinute) {
-    return;
+  function formatCompactNumber(value) {
+    return numberFormatter.format(Math.max(0, Math.trunc(value)));
   }
 
-  const metricMap = [
-    { id: "cardTotalHoje", value: numberFormatter.format(carta.totalHoje) },
-    { id: "cardLastRead", value: carta.hora },
-    { id: "cardClients", value: String(carta.connectedClients) },
-    { id: "cardOnlineTime", value: elements.timeOnline.textContent },
-    { id: "cardCardsPerMinute", value: String(carta.cardsPerMinute || elements.cardsPerMinute.textContent) }
-  ];
+  function formatRate(value) {
+    return rateFormatter.format(Math.max(0, value));
+  }
 
-  metricMap.forEach(({ id, value }) => {
-    const card = document.getElementById(id);
-    const valueSpan = card?.querySelector(".card-value");
-    if (!card || !valueSpan) {
+  function setText(key, element, value, card, options = {}) {
+    if (!element) {
+      return false;
+    }
+
+    const nextValue = String(value);
+    const shouldFlash = options.flash !== false;
+
+    if (viewState[key] === nextValue) {
+      return false;
+    }
+
+    viewState[key] = nextValue;
+
+    if (element.textContent !== nextValue) {
+      element.textContent = nextValue;
+      if (card && shouldFlash) {
+        flashCard(card);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  function flashCard(card) {
+    if (!card) {
       return;
     }
 
-    if (!restored && valueSpan.textContent !== value) {
-      valueSpan.textContent = value;
-      animateMetricCard(card);
+    card.classList.remove("is-updated");
+    void card.offsetWidth;
+    card.classList.add("is-updated");
+    window.setTimeout(() => card.classList.remove("is-updated"), 540);
+  }
+
+  function persistState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (_error) {
+      // O monitor continua funcionando mesmo sem armazenamento local.
     }
-  });
-}
+  }
 
-resizeChart();
-window.addEventListener("resize", resizeChart);
+  function restoreState() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        return null;
+      }
 
-const savedState = restoreState();
-if (savedState) {
-  applyCarta(savedState, { restored: true });
-}
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
 
-updateClock();
-updateOnlineTime();
-window.setInterval(() => {
+  function updateClock() {
+    const now = new Date();
+    setText("topbarDate", elements.topbarDate, formatDate(now));
+    setText("topbarTime", elements.topbarTime, formatDateTime(now));
+  }
+
+  function getOnlineElapsedMs() {
+    if (connectedSince !== null) {
+      return accumulatedOnlineMs + (Date.now() - connectedSince);
+    }
+
+    return accumulatedOnlineMs;
+  }
+
+  function updateTempoOnline() {
+    const elapsed = getOnlineElapsedMs();
+    const display = elapsed > 0 ? formatDuration(elapsed) : "--:--:--";
+    setText("tempoOnlineCard", elements.tempoOnlineCard, display, elements.tempoOnlineCard.closest(".stat-card"), { flash: false });
+  }
+
+  function updateConnection(stateValue, detail) {
+    elements.connection.classList.remove("is-offline");
+
+    if (stateValue === "offline") {
+      elements.connection.classList.add("is-offline");
+      setText("connectionText", elements.connectionText, "DESCONECTADO");
+      setText("statusDetail", elements.statusDetail, detail || "RECONEXÃO AUTOMÁTICA");
+      return;
+    }
+
+    if (stateValue === "connecting") {
+      setText("connectionText", elements.connectionText, "CONECTANDO");
+      setText("statusDetail", elements.statusDetail, detail || "CONEXÃO EM PROGRESSO");
+      return;
+    }
+
+    setText("connectionText", elements.connectionText, "ONLINE");
+    setText("statusDetail", elements.statusDetail, detail || "CONEXÃO ESTÁVEL");
+  }
+
+  function updateFooterStatus(message, detail) {
+    setText("statusText", elements.statusText, message);
+    setText("statusDetail", elements.statusDetail, detail);
+  }
+
+  function playBeep() {
+    beep.pause();
+    beep.currentTime = 0;
+
+    const promise = beep.play();
+    if (promise) {
+      promise.catch(() => {
+        // Alguns navegadores exigem interação do operador para permitir áudio.
+      });
+    }
+  }
+
+  function restartAnimation() {
+    elements.dashboard.classList.remove("update-animation");
+    void elements.dashboard.offsetWidth;
+    elements.dashboard.classList.add("update-animation");
+  }
+
+  function normalizeSnapshot(data) {
+    const snapshot = {
+      rota: normalizeText(data?.rota, "--", 20),
+      cidade: normalizeText(data?.cidade, "AGUARDANDO LEITURA", 80),
+      uf: normalizeText(data?.uf, "--", 10).toUpperCase(),
+      cep: normalizeText(data?.cep, "----- ---", 20),
+      hora: normalizeText(data?.hora, new Date().toISOString(), 80),
+      totalHoje: Math.max(0, Math.trunc(normalizeNumber(data?.totalHoje, 0)))
+    };
+
+    return snapshot;
+  }
+
+  function normalizeSummary(data) {
+    const routeEntriesSource = data?.routeEntries ?? data?.routes ?? data?.rotas ?? [];
+    const routeEntries = Array.isArray(routeEntriesSource)
+      ? routeEntriesSource
+          .map((entry) => ({
+            label: normalizeText(entry?.label ?? entry?.rota ?? entry?.route ?? entry?.name ?? entry?.key, "", 80),
+            count: Math.max(0, Math.trunc(normalizeNumber(entry?.count ?? entry?.total ?? entry?.value ?? entry?.quantidade, 0)))
+          }))
+          .filter((entry) => entry.label)
+      : [];
+
+    return {
+      totalHoje: Math.max(0, Math.trunc(normalizeNumber(data?.totalHoje ?? state.snapshot?.totalHoje, 0))),
+      rotasAtivas: Math.max(0, Math.trunc(normalizeNumber(data?.rotasAtivas, routeEntries.length))),
+      rotaMaisMovimentada: normalizeText(
+        data?.rotaMaisMovimentada ?? routeEntries[0]?.label,
+        "--",
+        80
+      ),
+      cidadeMaisProcessada: normalizeText(data?.cidadeMaisProcessada, "--", 80),
+      ufMaisProcessada: normalizeText(data?.ufMaisProcessada, "--", 10).toUpperCase(),
+      ultimaCartaLida: normalizeText(
+        data?.ultimaCartaLida ?? buildLastCartaLabel(state.snapshot),
+        "--",
+        120
+      ),
+      ultimaRotaEnviada: normalizeText(data?.ultimaRotaEnviada ?? state.snapshot?.rota, "--", 80),
+      producaoMediaMinuto: normalizeNumber(data?.producaoMediaMinuto, 0),
+      producaoHora: normalizeNumber(data?.producaoHora, 0),
+      routeEntries
+    };
+  }
+
+  function buildLastCartaLabel(snapshot) {
+    if (!snapshot) {
+      return "--";
+    }
+
+    return `${snapshot.rota} • ${snapshot.cidade}/${snapshot.uf}`;
+  }
+
+  function renderRouteChart(entries) {
+    const signature = entries.map((entry) => `${entry.label}:${entry.count}`).join("|");
+
+    if (signature === state.routeChartSignature) {
+      return;
+    }
+
+    state.routeChartSignature = signature;
+    elements.routeChart.replaceChildren();
+
+    if (!entries.length) {
+      const emptyState = document.createElement("article");
+      emptyState.className = "route-row route-row--empty";
+      emptyState.innerHTML = `
+        <div class="route-row-head">
+          <span class="route-row-name">AGUARDANDO DADOS DE ROTAS</span>
+          <span class="route-row-count">SEM MOVIMENTO</span>
+        </div>
+        <div class="route-row-bar"><span style="width: 0%"></span></div>
+      `;
+      elements.routeChart.appendChild(emptyState);
+      return;
+    }
+
+    const maxCount = Math.max(...entries.map((entry) => entry.count), 1);
+    const fragment = document.createDocumentFragment();
+
+    for (const entry of entries) {
+      const row = document.createElement("article");
+      row.className = "route-row";
+
+      const percentage = Math.max(0, Math.min(100, (entry.count / maxCount) * 100));
+      row.innerHTML = `
+        <div class="route-row-head">
+          <span class="route-row-name">${entry.label}</span>
+          <span class="route-row-count">${formatCompactNumber(entry.count)} cartas</span>
+        </div>
+        <div class="route-row-bar"><span style="width: ${percentage}%"></span></div>
+      `;
+
+      fragment.appendChild(row);
+    }
+
+    elements.routeChart.appendChild(fragment);
+  }
+
+  function refreshOperationalWidgets() {
+    const snapshot = state.snapshot;
+    const summary = state.summary;
+    const totalHoje = snapshot?.totalHoje ?? summary?.totalHoje ?? 0;
+    const routeEntries = summary?.routeEntries ?? [];
+    const rotasAtivas = summary?.rotasAtivas ?? routeEntries.length;
+    const routeMost = summary?.rotaMaisMovimentada ?? "--";
+    const cityMost = summary?.cidadeMaisProcessada ?? "--";
+    const ufMost = summary?.ufMaisProcessada ?? "--";
+    const lastCarta = summary?.ultimaCartaLida ?? buildLastCartaLabel(snapshot);
+    const lastRoute = summary?.ultimaRotaEnviada ?? snapshot?.rota ?? "--";
+    const onlineElapsedMs = getOnlineElapsedMs();
+    const productionPerMinute = onlineElapsedMs > 0
+      ? totalHoje / Math.max(onlineElapsedMs / 60000, 1 / 60)
+      : 0;
+    const productionPerHour = productionPerMinute * 60;
+    const timeOnline = onlineElapsedMs > 0 ? formatDuration(onlineElapsedMs) : "--:--:--";
+
+    setText("topbarTotalHoje", elements.topbarTotalHoje, formatCompactNumber(totalHoje), elements.topbarTotalHoje.closest(".topbar-chip"));
+    setText("topbarRotasAtivas", elements.topbarRotasAtivas, formatCompactNumber(rotasAtivas), elements.topbarRotasAtivas.closest(".topbar-chip"));
+    setText("topbarProducaoMinuto", elements.topbarProducaoMinuto, formatRate(productionPerMinute), elements.topbarProducaoMinuto.closest(".topbar-chip"), { flash: false });
+
+    setText("totalHojeCard", elements.totalHojeCard, formatCompactNumber(totalHoje), elements.totalHojeCard.closest(".stat-card"));
+    setText("rotasAtivasCard", elements.rotasAtivasCard, formatCompactNumber(rotasAtivas), elements.rotasAtivasCard.closest(".stat-card"));
+    setText("rotaMaisMovimentada", elements.rotaMaisMovimentada, routeMost, elements.rotaMaisMovimentada.closest(".stat-card"));
+    setText("cidadeMaisProcessada", elements.cidadeMaisProcessada, cityMost, elements.cidadeMaisProcessada.closest(".stat-card"));
+    setText("ufMaisProcessada", elements.ufMaisProcessada, ufMost, elements.ufMaisProcessada.closest(".stat-card"));
+    setText("ultimaCartaLidaCard", elements.ultimaCartaLidaCard, lastCarta, elements.ultimaCartaLidaCard.closest(".stat-card"));
+    setText("ultimaRotaEnviadaCard", elements.ultimaRotaEnviadaCard, lastRoute, elements.ultimaRotaEnviadaCard.closest(".stat-card"));
+    setText("producaoMediaMinutoCard", elements.producaoMediaMinutoCard, formatRate(productionPerMinute), elements.producaoMediaMinutoCard.closest(".stat-card"), { flash: false });
+    setText("producaoHoraCard", elements.producaoHoraCard, formatRate(productionPerHour), elements.producaoHoraCard.closest(".stat-card"), { flash: false });
+    setText("tempoOnlineCard", elements.tempoOnlineCard, timeOnline, elements.tempoOnlineCard.closest(".stat-card"), { flash: false });
+    setText("rotasAtivasPanel", elements.rotasAtivasPanel, formatCompactNumber(rotasAtivas), elements.rotasAtivasPanel.closest(".processing-pill"));
+
+    renderRouteChart(routeEntries);
+    updateTempoOnline();
+  }
+
+  function syncReadingIdleState() {
+    setText("statusLeitura", elements.statusLeitura, "AGUARDANDO LEITURA", elements.statusLeitura.closest(".status-pill"));
+    setText("mensagemLeitura", elements.mensagemLeitura, "AGUARDANDO LEITURA", elements.mensagemLeitura.closest(".route-hero"));
+    setText("statusLeituraCard", elements.statusLeituraCard, "AGUARDANDO LEITURA", elements.statusLeituraCard.closest(".reading-card"));
+    setText("mensagemLeituraCard", elements.mensagemLeituraCard, "AGUARDANDO LEITURA", elements.mensagemLeituraCard.closest(".reading-card"));
+  }
+
+  function applySnapshot(data, { restored = false } = {}) {
+    const snapshot = normalizeSnapshot(data);
+    state.snapshot = snapshot;
+    const pending = snapshot.rota.toUpperCase() === "PENDENTE";
+    const lastReading = buildLastCartaLabel(snapshot);
+
+    document.body.classList.toggle("pending", pending);
+
+    setText("rota", elements.rota, snapshot.rota, elements.routePanel);
+    setText("cep", elements.cep, snapshot.cep, elements.routePanel);
+    setText("cidade", elements.cidade, snapshot.cidade, elements.routePanel);
+    setText("uf", elements.uf, snapshot.uf, elements.routePanel);
+    setText("ultimaLeitura", elements.ultimaLeitura, lastReading, elements.routePanel);
+    setText("horaUltimaLeitura", elements.horaUltimaLeitura, formatDateTime(snapshot.hora), elements.routePanel);
+    setText("topbarTotalHoje", elements.topbarTotalHoje, formatCompactNumber(snapshot.totalHoje), elements.topbarTotalHoje.closest(".topbar-chip"));
+
+    if (restored) {
+      syncReadingIdleState();
+      updateFooterStatus("AGUARDANDO PRÓXIMA CARTA", "ÚLTIMA LEITURA RECUPERADA");
+      refreshOperationalWidgets();
+      persistState();
+      return;
+    }
+
+    const readingStatus = pending ? "PENDENTE" : "LEITURA CONFIRMADA";
+    const readingMessage = pending
+      ? "ROTA PENDENTE - VERIFICAR TRIAGEM"
+      : `ROTA ${snapshot.rota} RECEBIDA`;
+
+    setText("statusLeitura", elements.statusLeitura, readingStatus, elements.statusLeitura.closest(".status-pill"));
+    setText("mensagemLeitura", elements.mensagemLeitura, readingMessage, elements.routePanel);
+    setText("statusLeituraCard", elements.statusLeituraCard, readingStatus, elements.statusLeituraCard.closest(".reading-card"));
+    setText("mensagemLeituraCard", elements.mensagemLeituraCard, readingMessage, elements.mensagemLeituraCard.closest(".reading-card"));
+
+    restartAnimation();
+    playBeep();
+    updateFooterStatus(
+      pending ? "ROTA PENDENTE - VERIFICAR TRIAGEM" : `ROTA ${snapshot.rota} RECEBIDA`,
+      pending ? "ATENÇÃO NECESSÁRIA" : "DADOS ATUALIZADOS"
+    );
+
+    clearTimeout(statusTimer);
+    statusTimer = window.setTimeout(() => {
+      syncReadingIdleState();
+      updateFooterStatus("AGUARDANDO PRÓXIMA CARTA", pending ? "PENDÊNCIA EM EXIBIÇÃO" : "SISTEMA PRONTO");
+    }, DISPLAY_DURATION_MS);
+
+    refreshOperationalWidgets();
+    persistState();
+  }
+
+  function applyDashboardStats(data, { restored = false } = {}) {
+    state.summary = normalizeSummary(data || {});
+    refreshOperationalWidgets();
+
+    if (!restored) {
+      persistState();
+    }
+  }
+
+  function onConnect() {
+    connectedSince = Date.now();
+    accumulatedOnlineMs = 0;
+    updateConnection("online");
+    updateTempoOnline();
+  }
+
+  function onDisconnect() {
+    if (connectedSince !== null) {
+      accumulatedOnlineMs += Date.now() - connectedSince;
+      connectedSince = null;
+    }
+
+    updateConnection("offline");
+    updateTempoOnline();
+  }
+
+  function onConnectError(error) {
+    onDisconnect();
+    updateConnection("offline", error?.message ? "RECONEXÃO AUTOMÁTICA" : "TENTANDO RECONEXÃO");
+  }
+
+  function bindSocket() {
+    socket = io({
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      randomizationFactor: 0.25,
+      timeout: 10000
+    });
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+    socket.on("reconnect_attempt", () => updateConnection("connecting", "TENTANDO RECONEXÃO"));
+    socket.on("reconnect", onConnect);
+    socket.on("reconnect_error", () => updateConnection("offline", "FALHA NA RECONEXÃO"));
+    socket.on("reconnect_failed", () => updateConnection("offline", "RECONEXÃO INDISPONÍVEL"));
+    socket.on("estadoAtual", (payload) => applySnapshot(payload, { restored: true }));
+    socket.on("novaCarta", (payload) => applySnapshot(payload));
+    socket.on("dashboardStats", (payload) => applyDashboardStats(payload));
+    socket.on("connect_timeout", () => updateConnection("offline", "TEMPO ESGOTADO"));
+  }
+
   updateClock();
-  updateOnlineTime();
-}, 1000);
+  updateTempoOnline();
+  syncReadingIdleState();
+  updateConnection("connecting", "CONEXÃO EM PROGRESSO");
 
-const socket = io({
-  reconnection: true,
-  reconnectionAttempts: Infinity,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 10000,
-  randomizationFactor: 0.25,
-  timeout: 10000
-});
+  const savedState = restoreState();
+  if (savedState) {
+    if (savedState.summary) {
+      state.summary = normalizeSummary(savedState.summary);
+    }
 
-socket.on("connect", () => setConnection("online"));
-socket.on("disconnect", () => setConnection("offline"));
-socket.on("connect_error", () => setConnection("offline"));
-socket.on("novaCarta", (data) => applyCarta(data));
-socket.on("estadoAtual", (data) => applyCarta(data, { restored: true }));
+    if (savedState.snapshot) {
+      applySnapshot(savedState.snapshot, { restored: true });
+    }
+
+    if (savedState.summary) {
+      refreshOperationalWidgets();
+    }
+  }
+
+  window.setInterval(updateClock, 1000);
+  window.setInterval(updateTempoOnline, 1000);
+
+  bindSocket();
+})();
