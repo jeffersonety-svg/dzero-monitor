@@ -21,7 +21,8 @@ const operationalState = {
   startedAt: Date.now(),
   routes: new Map(),
   cities: new Map(),
-  ufs: new Map()
+  ufs: new Map(),
+  ceps: new Map()
 };
 
 app.disable("x-powered-by");
@@ -150,6 +151,7 @@ function buildDashboardStats() {
   const routeEntries = sortCounterEntries(operationalState.routes);
   const cityEntries = sortCounterEntries(operationalState.cities);
   const ufEntries = sortCounterEntries(operationalState.ufs);
+  const cepEntries = sortCounterEntries(operationalState.ceps);
   const totalHoje = latestState ? latestState.totalHoje : 0;
   const uptimeMinutes = Math.max((Date.now() - operationalState.startedAt) / 60000, 1 / 60);
   const productionPerMinute = totalHoje / uptimeMinutes;
@@ -160,11 +162,17 @@ function buildDashboardStats() {
 
   return {
     totalHoje,
+    totalCidades: cityEntries.length,
+    totalCepsUnicos: cepEntries.length,
     rotasAtivas: routeEntries.length,
     rotaMaisMovimentada: routeEntries[0]?.label ?? "--",
     cidadeMaisProcessada: cityEntries[0]?.label ?? "--",
     ufMaisProcessada: ufEntries[0]?.label ?? "--",
     ultimaCartaLida: lastCarta,
+    ultimaCidadeLida: latestState?.cidade ?? "--",
+    ultimaRotaLida: latestState?.rota ?? "--",
+    ultimoCepLido: latestState?.cep ?? "--",
+    horaUltimaLeitura: latestState?.hora ?? "--:--:--",
     ultimaRotaEnviada: latestState?.rota ?? "--",
     producaoMediaMinuto: productionPerMinute,
     producaoHora: productionPerHour,
@@ -234,6 +242,8 @@ function updateOperationalState(normalized, rawInput) {
   if (!setEntriesFromSnapshot(operationalState.ufs, ufSnapshot)) {
     incrementCounter(operationalState.ufs, normalized.uf);
   }
+
+  incrementCounter(operationalState.ceps, normalized.cep);
 }
 
 // Recebe a carta processada pelo fluxo do n8n e publica para todos os monitores.

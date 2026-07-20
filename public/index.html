@@ -23,7 +23,16 @@
         <div class="topbar-metrics" aria-label="Indicadores rápidos">
           <div class="topbar-chip connection" id="connection" aria-live="polite">
             <span class="connection-light" aria-hidden="true"></span>
-            <span id="connectionText">ONLINE</span>
+            <span class="topbar-chip-label">WEBSOCKET</span>
+            <strong id="connectionText">ONLINE</strong>
+          </div>
+          <div class="topbar-chip" id="serverStatusCard">
+            <span class="topbar-chip-label">SERVIDOR</span>
+            <strong id="serverStatusText">ONLINE</strong>
+          </div>
+          <div class="topbar-chip" id="clientesCard">
+            <span class="topbar-chip-label">CLIENTES</span>
+            <strong id="clientesConectadosTopbar">0</strong>
           </div>
           <div class="topbar-chip">
             <span class="topbar-chip-label">DATA</span>
@@ -127,35 +136,47 @@
             <strong class="stat-value" id="totalHojeCard">0</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Quantidade de rotas utilizadas</span>
+            <span class="stat-label">Total de cidades</span>
+            <strong class="stat-value" id="totalCidadesCard">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Total de CEP únicos</span>
+            <strong class="stat-value" id="totalCepsCard">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Total de rotas</span>
             <strong class="stat-value" id="rotasAtivasCard">0</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Rota mais movimentada</span>
-            <strong class="stat-value" id="rotaMaisMovimentada">--</strong>
+            <span class="stat-label">Última cidade lida</span>
+            <strong class="stat-value" id="ultimaCidadeCard">--</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Cidade mais processada</span>
+            <span class="stat-label">Última rota lida</span>
+            <strong class="stat-value" id="ultimaRotaLidaCard">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Último CEP</span>
+            <strong class="stat-value" id="ultimoCepCard">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Hora da última leitura</span>
+            <strong class="stat-value" id="horaUltimaLeituraCard">--:--:--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Maior cidade</span>
             <strong class="stat-value" id="cidadeMaisProcessada">--</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">UF mais processada</span>
-            <strong class="stat-value" id="ufMaisProcessada">--</strong>
+            <span class="stat-label">Maior rota</span>
+            <strong class="stat-value" id="rotaMaisMovimentada">--</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Última carta lida</span>
-            <strong class="stat-value" id="ultimaCartaLidaCard">--</strong>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Última rota enviada</span>
-            <strong class="stat-value" id="ultimaRotaEnviadaCard">--</strong>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Produção média/minuto</span>
+            <span class="stat-label">Média por minuto</span>
             <strong class="stat-value" id="producaoMediaMinutoCard">0</strong>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Produção/hora</span>
+            <span class="stat-label">Média por hora</span>
             <strong class="stat-value" id="producaoHoraCard">0</strong>
           </article>
           <article class="stat-card">

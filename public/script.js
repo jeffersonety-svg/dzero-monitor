@@ -26,16 +26,25 @@
     horaUltimaLeitura: document.getElementById("horaUltimaLeitura"),
     topbarDate: document.getElementById("topbarDate"),
     topbarTime: document.getElementById("topbarTime"),
+    serverStatusCard: document.getElementById("serverStatusCard"),
+    serverStatusText: document.getElementById("serverStatusText"),
+    clientesConectadosTopbar: document.getElementById("clientesConectadosTopbar"),
     topbarTotalHoje: document.getElementById("topbarTotalHoje"),
     topbarRotasAtivas: document.getElementById("topbarRotasAtivas"),
     topbarProducaoMinuto: document.getElementById("topbarProducaoMinuto"),
     rotasAtivasPanel: document.getElementById("rotasAtivasPanel"),
     totalHojeCard: document.getElementById("totalHojeCard"),
+    totalCidadesCard: document.getElementById("totalCidadesCard"),
+    totalCepsCard: document.getElementById("totalCepsCard"),
     rotasAtivasCard: document.getElementById("rotasAtivasCard"),
     rotaMaisMovimentada: document.getElementById("rotaMaisMovimentada"),
     cidadeMaisProcessada: document.getElementById("cidadeMaisProcessada"),
     ufMaisProcessada: document.getElementById("ufMaisProcessada"),
     ultimaCartaLidaCard: document.getElementById("ultimaCartaLidaCard"),
+    ultimaCidadeCard: document.getElementById("ultimaCidadeCard"),
+    ultimaRotaLidaCard: document.getElementById("ultimaRotaLidaCard"),
+    ultimoCepCard: document.getElementById("ultimoCepCard"),
+    horaUltimaLeituraCard: document.getElementById("horaUltimaLeituraCard"),
     ultimaRotaEnviadaCard: document.getElementById("ultimaRotaEnviadaCard"),
     producaoMediaMinutoCard: document.getElementById("producaoMediaMinutoCard"),
     producaoHoraCard: document.getElementById("producaoHoraCard"),
@@ -46,8 +55,6 @@
     statusDetail: document.getElementById("statusDetail")
   });
 
-  const beep = new Audio("/beep.mp3");
-  beep.preload = "auto";
   const speech = window.speechSynthesis || null;
 
   const state = {
@@ -63,6 +70,7 @@
   let accumulatedOnlineMs = 0;
   let flashTimer = null;
   let preferredVoice = null;
+  let lastAnnouncementKey = "";
 
   function normalizeText(value, fallback, maxLength) {
     const result = String(value ?? "").trim().slice(0, maxLength);
@@ -212,18 +220,6 @@
     setText("statusDetail", elements.statusDetail, detail);
   }
 
-  function playBeep() {
-    beep.pause();
-    beep.currentTime = 0;
-
-    const promise = beep.play();
-    if (promise) {
-      promise.catch(() => {
-        // Alguns navegadores exigem interação do operador para permitir áudio.
-      });
-    }
-  }
-
   function selectPreferredVoice() {
     if (!speech) {
       return null;
@@ -240,36 +236,74 @@
       || voices[0];
   }
 
+  function numberToPortuguese(value) {
+    const units = ["zero", "um", "dois", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove"];
+    const teens = ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+    const tens = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+    const safeValue = Math.max(0, Math.trunc(value));
+
+    if (safeValue < 10) {
+      return units[safeValue];
+    }
+
+    if (safeValue < 20) {
+      return teens[safeValue - 10];
+    }
+
+    const ten = Math.floor(safeValue / 10);
+    const unit = safeValue % 10;
+    return unit === 0 ? tens[ten] : `${tens[ten]} e ${units[unit]}`;
+  }
+
+  function formatRouteForSpeech(routeText) {
+    const normalized = routeText.replace(/^rota\s*/i, "").trim();
+
+    if (!/^\d+$/.test(normalized)) {
+      return normalized;
+    }
+
+    const routeNumber = Number(normalized);
+
+    if (normalized.length === 2 && routeNumber < 10) {
+      return `zero ${numberToPortuguese(routeNumber)}`;
+    }
+
+    return numberToPortuguese(routeNumber);
+  }
+
   function buildAnnouncement(snapshot) {
     const rawRouteText = normalizeText(snapshot?.rota, "", 20);
     const cityText = normalizeText(snapshot?.cidade, "", 80);
-    const routeText = rawRouteText.replace(/^rota\s*/i, "").trim();
+    const routeText = formatRouteForSpeech(rawRouteText);
 
     if (!routeText && !cityText) {
       return "";
     }
 
     if (!cityText) {
-      return `Rota ${routeText}`;
+      return `Rota ${routeText}.`;
     }
 
     if (!routeText) {
-      return `Cidade ${cityText}`;
+      return `Cidade ${cityText}.`;
     }
 
-    return `Rota ${routeText}, cidade ${cityText}`;
+    return `Rota ${routeText}. Cidade ${cityText}.`;
   }
 
   function speakSnapshot(snapshot) {
     const announcement = buildAnnouncement(snapshot);
+    const announcementKey = `${snapshot?.rota}|${snapshot?.cidade}|${snapshot?.cep}|${snapshot?.hora}`;
 
     if (!announcement) {
-      playBeep();
       return;
     }
 
     if (!speech || typeof window.SpeechSynthesisUtterance !== "function") {
-      playBeep();
+      return;
+    }
+
+    if (lastAnnouncementKey === announcementKey) {
       return;
     }
 
@@ -284,10 +318,17 @@
       utterance.rate = 1;
       utterance.pitch = 1;
       utterance.volume = 1;
-      utterance.onerror = () => playBeep();
-      speech.speak(utterance);
+      utterance.onerror = () => {
+        lastAnnouncementKey = "";
+      };
+      lastAnnouncementKey = announcementKey;
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          speech.speak(utterance);
+        });
+      });
     } catch (_error) {
-      playBeep();
+      lastAnnouncementKey = "";
     }
   }
 
@@ -334,6 +375,8 @@
 
     return {
       totalHoje: Math.max(0, Math.trunc(normalizeNumber(data?.totalHoje ?? state.snapshot?.totalHoje, 0))),
+      totalCidades: Math.max(0, Math.trunc(normalizeNumber(data?.totalCidades, 0))),
+      totalCepsUnicos: Math.max(0, Math.trunc(normalizeNumber(data?.totalCepsUnicos, 0))),
       rotasAtivas: Math.max(0, Math.trunc(normalizeNumber(data?.rotasAtivas, routeEntries.length))),
       rotaMaisMovimentada: normalizeText(
         data?.rotaMaisMovimentada ?? routeEntries[0]?.label,
@@ -347,6 +390,10 @@
         "--",
         120
       ),
+      ultimaCidadeLida: normalizeText(data?.ultimaCidadeLida ?? state.snapshot?.cidade, "--", 80),
+      ultimaRotaLida: normalizeText(data?.ultimaRotaLida ?? state.snapshot?.rota, "--", 20),
+      ultimoCepLido: normalizeText(data?.ultimoCepLido ?? state.snapshot?.cep, "--", 20),
+      horaUltimaLeitura: normalizeText(data?.horaUltimaLeitura ?? state.snapshot?.hora, "--:--:--", 80),
       ultimaRotaEnviada: normalizeText(data?.ultimaRotaEnviada ?? state.snapshot?.rota, "--", 80),
       producaoMediaMinuto: normalizeNumber(data?.producaoMediaMinuto, 0),
       producaoHora: normalizeNumber(data?.producaoHora, 0),
@@ -413,11 +460,17 @@
     const summary = state.summary;
     const totalHoje = snapshot?.totalHoje ?? summary?.totalHoje ?? 0;
     const routeEntries = summary?.routeEntries ?? [];
+    const totalCidades = summary?.totalCidades ?? 0;
+    const totalCepsUnicos = summary?.totalCepsUnicos ?? 0;
     const rotasAtivas = summary?.rotasAtivas ?? routeEntries.length;
     const routeMost = summary?.rotaMaisMovimentada ?? "--";
     const cityMost = summary?.cidadeMaisProcessada ?? "--";
     const ufMost = summary?.ufMaisProcessada ?? "--";
     const lastCarta = summary?.ultimaCartaLida ?? buildLastCartaLabel(snapshot);
+    const lastCity = summary?.ultimaCidadeLida ?? snapshot?.cidade ?? "--";
+    const lastRouteRead = summary?.ultimaRotaLida ?? snapshot?.rota ?? "--";
+    const lastCep = summary?.ultimoCepLido ?? snapshot?.cep ?? "--";
+    const lastReadTime = formatDateTime(summary?.horaUltimaLeitura ?? snapshot?.hora ?? "--:--:--");
     const lastRoute = summary?.ultimaRotaEnviada ?? snapshot?.rota ?? "--";
     const onlineElapsedMs = getOnlineElapsedMs();
     const productionPerMinute = onlineElapsedMs > 0
@@ -431,11 +484,17 @@
     setText("topbarProducaoMinuto", elements.topbarProducaoMinuto, formatRate(productionPerMinute), elements.topbarProducaoMinuto.closest(".topbar-chip"), { flash: false });
 
     setText("totalHojeCard", elements.totalHojeCard, formatCompactNumber(totalHoje), elements.totalHojeCard.closest(".stat-card"));
+    setText("totalCidadesCard", elements.totalCidadesCard, formatCompactNumber(totalCidades), elements.totalCidadesCard.closest(".stat-card"));
+    setText("totalCepsCard", elements.totalCepsCard, formatCompactNumber(totalCepsUnicos), elements.totalCepsCard.closest(".stat-card"));
     setText("rotasAtivasCard", elements.rotasAtivasCard, formatCompactNumber(rotasAtivas), elements.rotasAtivasCard.closest(".stat-card"));
     setText("rotaMaisMovimentada", elements.rotaMaisMovimentada, routeMost, elements.rotaMaisMovimentada.closest(".stat-card"));
     setText("cidadeMaisProcessada", elements.cidadeMaisProcessada, cityMost, elements.cidadeMaisProcessada.closest(".stat-card"));
     setText("ufMaisProcessada", elements.ufMaisProcessada, ufMost, elements.ufMaisProcessada.closest(".stat-card"));
     setText("ultimaCartaLidaCard", elements.ultimaCartaLidaCard, lastCarta, elements.ultimaCartaLidaCard.closest(".stat-card"));
+    setText("ultimaCidadeCard", elements.ultimaCidadeCard, lastCity, elements.ultimaCidadeCard.closest(".stat-card"));
+    setText("ultimaRotaLidaCard", elements.ultimaRotaLidaCard, lastRouteRead, elements.ultimaRotaLidaCard.closest(".stat-card"));
+    setText("ultimoCepCard", elements.ultimoCepCard, lastCep, elements.ultimoCepCard.closest(".stat-card"));
+    setText("horaUltimaLeituraCard", elements.horaUltimaLeituraCard, lastReadTime, elements.horaUltimaLeituraCard.closest(".stat-card"));
     setText("ultimaRotaEnviadaCard", elements.ultimaRotaEnviadaCard, lastRoute, elements.ultimaRotaEnviadaCard.closest(".stat-card"));
     setText("producaoMediaMinutoCard", elements.producaoMediaMinutoCard, formatRate(productionPerMinute), elements.producaoMediaMinutoCard.closest(".stat-card"), { flash: false });
     setText("producaoHoraCard", elements.producaoHoraCard, formatRate(productionPerHour), elements.producaoHoraCard.closest(".stat-card"), { flash: false });
@@ -536,6 +595,30 @@
     updateConnection("offline", error?.message ? "RECONEXÃO AUTOMÁTICA" : "TENTANDO RECONEXÃO");
   }
 
+  function updateConnectedClients(count) {
+    const normalizedCount = Math.max(0, Math.trunc(normalizeNumber(count, 0)));
+    setText("clientesConectadosTopbar", elements.clientesConectadosTopbar, formatCompactNumber(normalizedCount), elements.clientesConectadosTopbar.closest(".topbar-chip"));
+  }
+
+  async function refreshServerStatus() {
+    try {
+      const response = await fetch("/health", { cache: "no-store" });
+
+      if (!response.ok) {
+        throw new Error("health unavailable");
+      }
+
+      const payload = await response.json();
+      setText("serverStatusText", elements.serverStatusText, payload?.ok ? "ONLINE" : "INSTÁVEL", elements.serverStatusCard, { flash: false });
+
+      if (typeof payload?.connectedClients !== "undefined") {
+        updateConnectedClients(payload.connectedClients);
+      }
+    } catch (_error) {
+      setText("serverStatusText", elements.serverStatusText, "OFFLINE", elements.serverStatusCard, { flash: false });
+    }
+  }
+
   function bindSocket() {
     socket = io({
       reconnection: true,
@@ -556,6 +639,7 @@
     socket.on("estadoAtual", (payload) => applySnapshot(payload, { restored: true }));
     socket.on("novaCarta", (payload) => applySnapshot(payload));
     socket.on("dashboardStats", (payload) => applyDashboardStats(payload));
+    socket.on("clientesConectados", updateConnectedClients);
     socket.on("connect_timeout", () => updateConnection("offline", "TEMPO ESGOTADO"));
   }
 
@@ -563,6 +647,7 @@
   updateTempoOnline();
   syncReadingIdleState();
   updateConnection("connecting", "CONEXÃO EM PROGRESSO");
+  setText("serverStatusText", elements.serverStatusText, "VERIFICANDO", elements.serverStatusCard, { flash: false });
 
   const savedState = restoreState();
   if (savedState) {
@@ -588,6 +673,8 @@
 
   window.setInterval(updateClock, 1000);
   window.setInterval(updateTempoOnline, 1000);
+  window.setInterval(refreshServerStatus, 30000);
 
+  refreshServerStatus();
   bindSocket();
 })();
