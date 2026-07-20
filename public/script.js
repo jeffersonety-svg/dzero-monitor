@@ -37,6 +37,8 @@
     summary: null,
     citiesSeen: new Set(),
     lastAnnouncementKey: "",
+    pendingAnnouncement: null,
+    diagnosticPending: true,
     connectedSince: null,
     statusTimer: null,
     routeFlashTimer: null,
@@ -275,7 +277,7 @@
 
     if (letterNumberMatch) {
       const routeNumber = Number(letterNumberMatch[2]);
-      return `${letterNumberMatch[1].toUpperCase()} ${numberToPortuguese(routeNumber)}`;
+      return `${letterNumberMatch[1].toUpperCase()} ${routeNumber}`;
     }
 
     if (!/^\d+$/.test(normalized)) {
@@ -299,7 +301,28 @@
       return "";
     }
 
-    return `Rota ${routeText}. Cidade ${cityText}.`;
+    return `R ${routeText}. Cidade ${cityText}.`;
+  }
+
+  function speakText(text, options = {}) {
+    if (!speech || typeof window.SpeechSynthesisUtterance !== "function") {
+      return;
+    }
+
+    const utterance = new window.SpeechSynthesisUtterance(text);
+    utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
+    utterance.voice = runtimeState.preferredVoice || null;
+    utterance.rate = options.rate ?? 0.98;
+    utterance.pitch = options.pitch ?? 1.0;
+    utterance.volume = options.volume ?? 1.0;
+    utterance.onerror = () => {
+      if (options.onError) {
+        options.onError();
+      }
+    };
+
+    speech.resume();
+    speech.speak(utterance);
   }
 
   function speakReading(snapshot) {
@@ -316,30 +339,60 @@
 
     runtimeState.preferredVoice = runtimeState.preferredVoice || selectPreferredVoice();
 
+    if (!runtimeState.preferredVoice && speech.getVoices().length === 0) {
+      runtimeState.pendingAnnouncement = { snapshot, announcementKey };
+      return;
+    }
+
     try {
       speech.cancel();
+      speech.resume();
 
-      const utterance = new window.SpeechSynthesisUtterance(announcement);
-      utterance.lang = runtimeState.preferredVoice?.lang || "pt-BR";
-      utterance.voice = runtimeState.preferredVoice || null;
-      utterance.rate = 0.96;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      utterance.onerror = () => {
+      const onSpeechError = () => {
         runtimeState.lastAnnouncementKey = "";
       };
 
       runtimeState.lastAnnouncementKey = announcementKey;
+      runtimeState.pendingAnnouncement = null;
 
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          speech.speak(utterance);
+          speakText(announcement, { rate: 0.99, onError: onSpeechError });
         });
       });
     } catch (_error) {
       runtimeState.lastAnnouncementKey = "";
+      runtimeState.pendingAnnouncement = { snapshot, announcementKey };
     }
+  }
+
+  function flushPendingAnnouncement() {
+    if (!runtimeState.pendingAnnouncement) {
+      return;
+    }
+
+    const { snapshot, announcementKey } = runtimeState.pendingAnnouncement;
+
+    if (!snapshot || runtimeState.lastAnnouncementKey === announcementKey) {
+      runtimeState.pendingAnnouncement = null;
+      return;
+    }
+
+    speakReading(snapshot);
+  }
+
+  function speakDiagnosticGreeting() {
+    if (!speech || !runtimeState.diagnosticPending) {
+      return;
+    }
+
+    runtimeState.diagnosticPending = false;
+
+    window.setTimeout(() => {
+      runtimeState.preferredVoice = runtimeState.preferredVoice || selectPreferredVoice();
+      speakText("Voz ativada.", { rate: 1.02 });
+    }, 700);
   }
 
   function flashRouteAndCity() {
@@ -498,12 +551,14 @@
     runtimeState.preferredVoice = selectPreferredVoice();
     speech.addEventListener("voiceschanged", () => {
       runtimeState.preferredVoice = selectPreferredVoice();
+      flushPendingAnnouncement();
     });
   }
 
   window.setInterval(updateClock, 1000);
   window.setInterval(refreshServerStatus, 30000);
   refreshServerStatus();
+  speakDiagnosticGreeting();
 
   bindSocket();
 })();
