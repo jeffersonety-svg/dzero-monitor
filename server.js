@@ -48,8 +48,11 @@ app.get("/", (_request, response) => {
 });
 
 app.use(express.static(path.join(__dirname, "public"), {
-  maxAge: "1h",
-  etag: true
+  maxAge: 0,
+  etag: false,
+  setHeaders(response) {
+    response.setHeader("Cache-Control", "no-store");
+  }
 }));
 
 function broadcastConnectedClients() {
@@ -63,6 +66,21 @@ function normalizeLabel(value, maxLength = 80) {
 function normalizeCount(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
+function repairTextEncoding(value) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw || !/[ÃÂ�]/.test(raw)) {
+    return raw;
+  }
+
+  try {
+    const repaired = Buffer.from(raw, "latin1").toString("utf8");
+    return repaired.includes("�") ? raw : repaired;
+  } catch (_error) {
+    return raw;
+  }
 }
 
 function normalizeCounterEntries(source) {
@@ -197,7 +215,7 @@ function normalizeUpdate(input) {
     return { ok: false, error: "Envie um objeto JSON com os dados da carta." };
   }
 
-  const value = (field, maxLength) => String(input[field] ?? "").trim().slice(0, maxLength);
+  const value = (field, maxLength) => repairTextEncoding(String(input[field] ?? "").trim()).slice(0, maxLength);
   const rota = value("rota", 20);
   const cidade = value("cidade", 80);
   const uf = value("uf", 10).toUpperCase();

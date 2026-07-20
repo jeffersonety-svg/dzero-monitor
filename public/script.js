@@ -16,19 +16,17 @@
     horaUltimaLeitura: document.getElementById("horaUltimaLeitura"),
     statusLeitura: document.getElementById("statusLeitura"),
     mensagemLeitura: document.getElementById("mensagemLeitura"),
+    systemId: document.getElementById("systemId"),
+    stationDetail: document.getElementById("stationDetail"),
     topbarDate: document.getElementById("topbarDate"),
     topbarTime: document.getElementById("topbarTime"),
-    topbarTotalHoje: document.getElementById("topbarTotalHoje"),
     connection: document.getElementById("connection"),
     connectionText: document.getElementById("connectionText"),
     serverStatusText: document.getElementById("serverStatusText"),
     serverStatusCard: document.getElementById("serverStatusCard"),
     clientesConectadosTopbar: document.getElementById("clientesConectadosTopbar"),
-    totalHojeCard: document.getElementById("totalHojeCard"),
     totalCidadesCard: document.getElementById("totalCidadesCard"),
-    ultimaCidadeCard: document.getElementById("ultimaCidadeCard"),
-    ultimaRotaLidaCard: document.getElementById("ultimaRotaLidaCard"),
-    ultimoCepCard: document.getElementById("ultimoCepCard"),
+    totalHojeCard: document.getElementById("totalHojeCard"),
     statusText: document.getElementById("statusText"),
     statusDetail: document.getElementById("statusDetail")
   });
@@ -50,6 +48,25 @@
   function normalizeText(value, fallback, maxLength) {
     const result = String(value ?? "").trim().slice(0, maxLength);
     return result || fallback;
+  }
+
+  function repairTextEncoding(value) {
+    const raw = String(value ?? "").trim();
+
+    if (!raw) {
+      return "";
+    }
+
+    if (!/[ÃÂ�]/.test(raw)) {
+      return raw;
+    }
+
+    try {
+      const repaired = decodeURIComponent(escape(raw));
+      return repaired.includes("�") ? raw : repaired;
+    } catch (_error) {
+      return raw;
+    }
   }
 
   function normalizeNumber(value, fallback = 0) {
@@ -76,14 +93,34 @@
   function formatDate(value = new Date()) {
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) {
-      return "--/--/----";
+      return "-- --- ----";
     }
 
-    return date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    });
+    const day = date.toLocaleDateString("pt-BR", { day: "2-digit" });
+    const month = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "").toUpperCase();
+    const year = date.toLocaleDateString("pt-BR", { year: "numeric" });
+    return `${day} ${month} ${year}`;
+  }
+
+  function formatLoad(value) {
+    if (value === null || typeof value === "undefined" || value === "") {
+      return "--";
+    }
+
+    if (typeof value === "string" && value.includes("%")) {
+      return normalizeText(value, "--", 12);
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return "--";
+    }
+
+    return `${Math.max(0, Math.min(100, Math.trunc(parsed)))}%`;
+  }
+
+  function buildStationDetail(systemId, scannerLoad) {
+    return `ESTAÇÃO_${systemId}_ATIVA | CARGA: ${scannerLoad}`;
   }
 
   function setText(key, element, value, card, shouldFlash = true) {
@@ -168,18 +205,15 @@
 
     if (status === "offline") {
       elements.connection.classList.add("is-offline");
-      setText("connectionText", elements.connectionText, "DESCONECTADO", null, false);
       setText("statusDetail", elements.statusDetail, "RECONEXÃO AUTOMÁTICA", null, false);
       return;
     }
 
     if (status === "connecting") {
-      setText("connectionText", elements.connectionText, "CONECTANDO", null, false);
       setText("statusDetail", elements.statusDetail, "CONEXÃO EM PROGRESSO", null, false);
       return;
     }
 
-    setText("connectionText", elements.connectionText, "ONLINE", null, false);
     setText("statusDetail", elements.statusDetail, "CONEXÃO ESTÁVEL", null, false);
   }
 
@@ -317,28 +351,26 @@
     runtimeState.summary = {
       totalHoje: Math.max(0, Math.trunc(normalizeNumber(summary?.totalHoje, runtimeState.snapshot?.totalHoje || 0))),
       totalCidades: Math.max(0, Math.trunc(normalizeNumber(summary?.totalCidades, runtimeState.citiesSeen.size))),
-      ultimaCidadeLida: normalizeText(summary?.ultimaCidadeLida, runtimeState.snapshot?.cidade || "--", 80),
+      ultimaCidadeLida: repairTextEncoding(normalizeText(summary?.ultimaCidadeLida, runtimeState.snapshot?.cidade || "--", 80)),
       ultimaRotaLida: normalizeText(summary?.ultimaRotaLida, runtimeState.snapshot?.rota || "--", 20),
       ultimoCepLido: normalizeText(summary?.ultimoCepLido, runtimeState.snapshot?.cep || "--", 20)
     };
 
-    setText("topbarTotalHoje", elements.topbarTotalHoje, numberFormatter.format(runtimeState.summary.totalHoje), elements.topbarTotalHoje.closest(".topbar-chip"));
     setText("totalHojeCard", elements.totalHojeCard, numberFormatter.format(runtimeState.summary.totalHoje), elements.totalHojeCard.closest(".side-card"));
-    setText("totalCidadesCard", elements.totalCidadesCard, numberFormatter.format(runtimeState.summary.totalCidades), elements.totalCidadesCard.closest(".side-card"));
-    setText("ultimaCidadeCard", elements.ultimaCidadeCard, runtimeState.summary.ultimaCidadeLida, elements.ultimaCidadeCard.closest(".side-card"));
-    setText("ultimaRotaLidaCard", elements.ultimaRotaLidaCard, runtimeState.summary.ultimaRotaLida, elements.ultimaRotaLidaCard.closest(".side-card"));
-    setText("ultimoCepCard", elements.ultimoCepCard, runtimeState.summary.ultimoCepLido, elements.ultimoCepCard.closest(".side-card"));
+    setText("totalCidadesCard", elements.totalCidadesCard, numberFormatter.format(runtimeState.summary.totalCidades), elements.totalCidadesCard.closest(".summary-card"));
   }
 
   function applySnapshot(data, options = {}) {
     const restored = Boolean(options.restored);
     const snapshot = {
-      rota: normalizeText(data?.rota, "--", 20),
-      cidade: normalizeText(data?.cidade, "AGUARDANDO LEITURA", 80),
+      rota: repairTextEncoding(normalizeText(data?.rota, "--", 20)),
+      cidade: repairTextEncoding(normalizeText(data?.cidade, "AGUARDANDO LEITURA", 80)),
       uf: normalizeText(data?.uf, "--", 10).toUpperCase(),
-      cep: normalizeText(data?.cep, "----- ---", 20),
+      cep: repairTextEncoding(normalizeText(data?.cep, "----- ---", 20)),
       hora: normalizeText(data?.hora, new Date().toISOString(), 80),
-      totalHoje: Math.max(0, Math.trunc(normalizeNumber(data?.totalHoje, 0)))
+      totalHoje: Math.max(0, Math.trunc(normalizeNumber(data?.totalHoje, 0))),
+      systemId: normalizeText(data?.systemId ?? data?.stationId ?? data?.estacaoAtiva, "A1", 20).toUpperCase(),
+      scannerLoad: formatLoad(data?.scannerLoad ?? data?.load ?? data?.scannerLevel)
     };
 
     runtimeState.snapshot = snapshot;
@@ -353,27 +385,29 @@
     setText("cidade", elements.cidade, snapshot.cidade, elements.cidadeCardBox);
     setText("cep", elements.cep, snapshot.cep, elements.routePanel);
     setText("uf", elements.uf, snapshot.uf, elements.routePanel);
-    setText("horaUltimaLeitura", elements.horaUltimaLeitura, readingTime, elements.routePanel);
+    setText("horaUltimaLeitura", elements.horaUltimaLeitura, readingTime, elements.routePanel, false);
+    setText("systemId", elements.systemId, snapshot.systemId, elements.routePanel, false);
+    setText("stationDetail", elements.stationDetail, buildStationDetail(snapshot.systemId, snapshot.scannerLoad), null, false);
 
     if (restored) {
       setText("statusLeitura", elements.statusLeitura, "AGUARDANDO LEITURA", null, false);
-      setText("mensagemLeitura", elements.mensagemLeitura, "AGUARDANDO LEITURA", null, false);
-      setFooterStatus("AGUARDANDO PRÓXIMA CARTA", "ÚLTIMA LEITURA RECUPERADA");
+      setText("mensagemLeitura", elements.mensagemLeitura, "AGUARDANDO LEITURA", elements.routePanel, false);
+      setFooterStatus("PROCESSAMENTO CONCLUÍDO", "ÚLTIMA LEITURA RECUPERADA");
     } else {
       const status = isPending ? "PENDENTE" : "LEITURA CONFIRMADA";
       const message = isPending ? "ROTA PENDENTE - VERIFICAR TRIAGEM" : `ROTA ${snapshot.rota} RECEBIDA`;
 
-      setText("statusLeitura", elements.statusLeitura, status, elements.statusLeitura.closest(".status-pill"));
-      setText("mensagemLeitura", elements.mensagemLeitura, message, elements.mensagemLeitura.closest(".main-card"));
+      setText("statusLeitura", elements.statusLeitura, status, null, false);
+      setText("mensagemLeitura", elements.mensagemLeitura, message, elements.routePanel, false);
 
       flashRouteAndCity();
-      setFooterStatus(message, isPending ? "ATENÇÃO NECESSÁRIA" : "DADOS ATUALIZADOS");
+      setFooterStatus(isPending ? "PROCESSAMENTO PENDENTE" : "PROCESSAMENTO CONCLUÍDO", isPending ? "ATENÇÃO NECESSÁRIA" : "DADOS ATUALIZADOS");
 
       window.clearTimeout(runtimeState.statusTimer);
       runtimeState.statusTimer = window.setTimeout(() => {
         setText("statusLeitura", elements.statusLeitura, "AGUARDANDO LEITURA", null, false);
         setText("mensagemLeitura", elements.mensagemLeitura, "AGUARDANDO LEITURA", null, false);
-        setFooterStatus("AGUARDANDO PRÓXIMA CARTA", isPending ? "PENDÊNCIA EM EXIBIÇÃO" : "SISTEMA PRONTO");
+        setFooterStatus("PROCESSAMENTO CONCLUÍDO", isPending ? "PENDÊNCIA EM EXIBIÇÃO" : "SISTEMA PRONTO");
       }, STATUS_TIMEOUT_MS);
 
       speakReading(snapshot);
@@ -404,13 +438,13 @@
       }
 
       const payload = await response.json();
-      setText("serverStatusText", elements.serverStatusText, payload?.ok ? "ONLINE" : "INSTÁVEL", elements.serverStatusCard, false);
+      elements.serverStatusCard?.classList.remove("is-offline");
 
       if (typeof payload?.connectedClients !== "undefined") {
         updateConnectedClients(payload.connectedClients);
       }
     } catch (_error) {
-      setText("serverStatusText", elements.serverStatusText, "OFFLINE", elements.serverStatusCard, false);
+      elements.serverStatusCard?.classList.add("is-offline");
     }
   }
 
@@ -450,7 +484,6 @@
 
   updateClock();
   setConnectionStatus("connecting");
-  setText("serverStatusText", elements.serverStatusText, "VERIFICANDO", elements.serverStatusCard, false);
 
   if (runtimeState.snapshot) {
     applySnapshot(runtimeState.snapshot, { restored: true });

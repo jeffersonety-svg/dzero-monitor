@@ -3,123 +3,131 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#071710" />
+    <meta name="theme-color" content="#131313" />
     <meta name="description" content="Monitor em tempo real da central de triagem de correspondências." />
     <title>MonitorTriagem</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css?v=20260720-2" />
   </head>
   <body>
     <div class="monitor" id="monitor">
       <header class="topbar">
-        <div class="brand" aria-label="MonitorTriagem">
-          <img class="brand-logo" src="/logo.png" alt="" />
-          <div>
-            <p class="brand-kicker">CENTRAL OPERACIONAL</p>
-            <h1>MONITOR TRIAGEM 3.0</h1>
-          </div>
+        <div class="brand" aria-label="Monitor Triagem Dzero">
+          <p class="brand-title">MONITOR TRIAGEM</p>
+          <p class="brand-subtitle">DZERO | SISTEMA AUTOMATIZADO DE TRIAGEM</p>
         </div>
 
-        <div class="topbar-metrics" aria-label="Indicadores rápidos">
-          <div class="topbar-chip connection" id="connection" aria-live="polite">
-            <span class="connection-light" aria-hidden="true"></span>
-            <span class="chip-label">WEBSOCKET</span>
-            <strong id="connectionText">CONECTANDO</strong>
+        <div class="topbar-status" aria-label="Indicadores de status">
+          <div class="status-node topbar-chip connection" id="connection" aria-live="polite">
+            <span class="status-led" aria-hidden="true"></span>
+            <span class="chip-label">CONEXÃO</span>
           </div>
-          <div class="topbar-chip" id="serverStatusCard">
+
+          <div class="status-node topbar-chip" id="serverStatusCard">
+            <span class="status-led" aria-hidden="true"></span>
             <span class="chip-label">SERVIDOR</span>
-            <strong id="serverStatusText">VERIFICANDO</strong>
           </div>
-          <div class="topbar-chip" id="clientesCard">
+
+          <div class="status-node topbar-chip status-node-count" id="clientesCard">
             <span class="chip-label">CLIENTES</span>
             <strong id="clientesConectadosTopbar">0</strong>
           </div>
-          <div class="topbar-chip">
-            <span class="chip-label">DATA</span>
-            <strong id="topbarDate">--/--/----</strong>
-          </div>
-          <div class="topbar-chip">
-            <span class="chip-label">HORA</span>
-            <strong id="topbarTime">--:--:--</strong>
-          </div>
-          <div class="topbar-chip">
-            <span class="chip-label">CARTAS DO DIA</span>
-            <strong id="topbarTotalHoje">0</strong>
-          </div>
+        </div>
+
+        <div class="clock-panel" aria-label="Relógio do sistema">
+          <strong class="clock-time" id="topbarTime">--:--:--</strong>
+          <span class="clock-date" id="topbarDate">-- --- ----</span>
         </div>
       </header>
 
       <main class="dashboard" id="dashboard">
-        <section class="main-panel" aria-label="Painel principal" aria-live="assertive">
-          <div class="panel-header">
-            <p class="panel-kicker">PAINEL PRINCIPAL</p>
-            <div class="status-pill">
-              <span class="chip-label">STATUS</span>
-              <strong id="statusLeitura">AGUARDANDO LEITURA</strong>
+        <section class="summary-grid" aria-label="Resumo operacional">
+          <article class="summary-card main-card">
+            <div>
+              <span class="main-card-label">TOTAL DE CARTAS</span>
+              <strong class="summary-value" id="totalHojeCard">0</strong>
             </div>
-          </div>
+            <span class="summary-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M3 6.75A1.75 1.75 0 0 1 4.75 5h14.5A1.75 1.75 0 0 1 21 6.75v10.5A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25zm1.5.38v.2l7 4.62a.9.9 0 0 0 1 0l7-4.62v-.2a.25.25 0 0 0-.25-.25H4.75a.25.25 0 0 0-.25.25m15 1.99-6.18 4.08a2.4 2.4 0 0 1-2.64 0L4.5 9.12v8.13c0 .14.11.25.25.25h14.5a.25.25 0 0 0 .25-.25z" />
+              </svg>
+            </span>
+          </article>
 
-          <div class="main-route-block">
-            <span class="route-label">ROTA</span>
-            <strong class="route-value" id="rota">--</strong>
-          </div>
-
-          <div class="main-grid">
-            <article class="main-card main-card-city" id="cidadeCardBox">
-              <span class="main-card-label">CIDADE</span>
-              <strong class="main-card-value" id="cidade">AGUARDANDO LEITURA</strong>
-            </article>
-            <article class="main-card main-card-cep">
-              <span class="main-card-label">CEP</span>
-              <strong class="main-card-value" id="cep">----- ---</strong>
-            </article>
-            <article class="main-card main-card-uf">
-              <span class="main-card-label">UF</span>
-              <strong class="main-card-value" id="uf">--</strong>
-            </article>
-            <article class="main-card main-card-hour">
-              <span class="main-card-label">HORA</span>
-              <strong class="main-card-value" id="horaUltimaLeitura">--:--:--</strong>
-            </article>
-            <article class="main-card main-card-message main-card-wide">
-              <span class="main-card-label">MENSAGEM</span>
-              <strong class="main-card-value" id="mensagemLeitura">AGUARDANDO LEITURA</strong>
-            </article>
-          </div>
+          <article class="summary-card main-card">
+            <div>
+              <span class="main-card-label">CIDADES IDENTIFICADAS</span>
+              <strong class="summary-value" id="totalCidadesCard">0</strong>
+            </div>
+            <span class="summary-icon is-muted" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M4 20.25A.75.75 0 0 1 4.75 19H6V8.75A1.75 1.75 0 0 1 7.75 7h4.5A1.75 1.75 0 0 1 14 8.75V11h2.25A1.75 1.75 0 0 1 18 12.75V19h1.25a.75.75 0 0 1 0 1.5zm3.5-1.5h5V8.75a.25.25 0 0 0-.25-.25h-4.5a.25.25 0 0 0-.25.25zm6.5 0h2.5v-6a.25.25 0 0 0-.25-.25H14zm-4.75-7.5h1.5v1.5h-1.5zm0 3h1.5v1.5h-1.5zm-3-3h1.5v1.5h-1.5zm0 3h1.5v1.5h-1.5zm9 0h1.5v1.5h-1.5z" />
+              </svg>
+            </span>
+          </article>
         </section>
 
-        <aside class="sidebar" aria-label="Indicadores essenciais">
-          <article class="side-card">
-            <span class="side-label">TOTAL DE CARTAS</span>
-            <strong class="side-value" id="totalHojeCard">0</strong>
+        <section class="content-grid" aria-label="Painel principal" aria-live="assertive">
+          <article class="main-panel route-card" aria-label="Rota da última carta lida">
+            <div class="card-heading">
+              <span class="section-label">ROTA</span>
+              <span class="route-timestamp">
+                <span class="chip-label">ÚLTIMA LEITURA</span>
+                <strong id="horaUltimaLeitura">--:--:--</strong>
+              </span>
+            </div>
+
+            <strong class="route-value" id="rota">--</strong>
+
+            <div class="route-footer">
+              <p class="route-message" id="mensagemLeitura">AGUARDANDO LEITURA</p>
+              <strong class="system-id" id="systemId">A1</strong>
+            </div>
           </article>
-          <article class="side-card">
-            <span class="side-label">TOTAL DE CIDADES</span>
-            <strong class="side-value" id="totalCidadesCard">0</strong>
+
+          <div class="support-column">
+            <article class="main-card support-card uf-card">
+              <span class="main-card-label">UF</span>
+              <strong class="support-value" id="uf">--</strong>
+            </article>
+
+            <article class="main-card support-card cep-card">
+              <span class="main-card-label">CEP</span>
+              <strong class="support-value support-value-accent" id="cep">----- ---</strong>
+            </article>
+          </div>
+
+          <article class="main-card city-card" id="cidadeCardBox">
+            <span class="main-card-label">CIDADE</span>
+            <strong class="city-value" id="cidade">AGUARDANDO LEITURA</strong>
           </article>
-          <article class="side-card">
-            <span class="side-label">ÚLTIMA CIDADE</span>
-            <strong class="side-value" id="ultimaCidadeCard">--</strong>
-          </article>
-          <article class="side-card">
-            <span class="side-label">ÚLTIMA ROTA</span>
-            <strong class="side-value" id="ultimaRotaLidaCard">--</strong>
-          </article>
-          <article class="side-card">
-            <span class="side-label">ÚLTIMO CEP</span>
-            <strong class="side-value" id="ultimoCepCard">--</strong>
-          </article>
-        </aside>
+        </section>
       </main>
 
       <footer class="statusbar" id="statusbar" aria-live="polite">
-        <span class="status-pulse" aria-hidden="true"></span>
-        <strong id="statusText">AGUARDANDO PRÓXIMA CARTA</strong>
-        <span class="status-detail" id="statusDetail">SISTEMA PRONTO</span>
+        <div class="statusbar-main">
+          <span class="status-pulse" aria-hidden="true"></span>
+          <div>
+            <p class="status-caption">STATUS OPERACIONAL</p>
+            <strong id="statusText">PROCESSAMENTO CONCLUÍDO</strong>
+          </div>
+        </div>
+
+        <div class="statusbar-side">
+          <span class="status-tag" id="statusLeitura">AGUARDANDO LEITURA</span>
+          <span class="status-detail" id="statusDetail">SISTEMA PRONTO</span>
+          <span class="station-detail" id="stationDetail">ESTAÇÃO_A1_ATIVA | CARGA: --</span>
+        </div>
       </footer>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/script.js"></script>
+    <script src="/script.js?v=20260720-2"></script>
   </body>
 </html>

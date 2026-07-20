@@ -63,3 +63,23 @@ test("POST /update rejeita dados obrigatórios ausentes", async () => {
 
   assert.equal(response.status, 400);
 });
+
+test("POST /update corrige texto com encoding quebrado", async () => {
+  const response = await fetch(`${baseUrl}/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rota: "R-102",
+      cidade: "SÃ£o Paulo",
+      uf: "SP",
+      cep: "01310-911",
+      hora: "12:00:00",
+      totalHoje: 1242
+    })
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.cidade, "São Paulo");
+});
