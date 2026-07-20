@@ -337,6 +337,9 @@
 
       if (!voicesReady || isBusy) {
         if (attempt >= (options.maxAttempts ?? 10)) {
+          if (options.fallbackOnTimeout) {
+            speakTextNow(text, options);
+          }
           return;
         }
 
@@ -371,7 +374,6 @@
     }
 
     try {
-      speech.cancel();
       speech.resume();
 
       const onSpeechError = () => {
@@ -384,7 +386,7 @@
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          speakTextWhenReady(announcement, { rate: 0.99, onError: onSpeechError });
+          speakTextWhenReady(announcement, { rate: 0.99, onError: onSpeechError, maxAttempts: 25, retryDelayMs: 100, fallbackOnTimeout: true });
         });
       });
     } catch (_error) {
@@ -417,7 +419,7 @@
 
     window.setTimeout(() => {
       runtimeState.preferredVoice = runtimeState.preferredVoice || selectPreferredVoice();
-      speakTextWhenReady("Voz ativada.", { rate: 1.02 });
+      speakTextWhenReady("Voz ativada.", { rate: 1.02, maxAttempts: 20, retryDelayMs: 100, fallbackOnTimeout: true });
     }, 700);
   }
 
