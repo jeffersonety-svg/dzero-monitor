@@ -17,6 +17,20 @@
   --radius-sm: 14px;
 }
 
+/* Perfil de maior contraste para TVs e painéis grandes. */
+@media (min-width: 1600px) {
+  :root {
+    --text: #ffffff;
+    --muted: #c7c7c7;
+    --muted-strong: #e1e1e1;
+    --panel: #242424;
+    --panel-elevated: #2b2b2b;
+    --border: rgba(255, 255, 255, 0.14);
+    --border-strong: rgba(255, 255, 255, 0.22);
+    --shadow: 0 16px 34px rgba(0, 0, 0, 0.3);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -72,6 +86,45 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 30px;
   box-shadow: inset 0 0 44px rgba(0, 0, 0, 0.28);
+}
+
+@media (min-width: 1600px) {
+  .monitor::before {
+    opacity: 0.12;
+  }
+
+  .monitor::after {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.14);
+  }
+
+  .topbar,
+  .main-card,
+  .main-panel,
+  .statusbar {
+    background: #222222;
+  }
+
+  .chip-label,
+  .main-card-label,
+  .section-label,
+  .status-caption,
+  .status-detail,
+  .station-detail,
+  .route-message,
+  .route-timestamp {
+    color: var(--muted-strong);
+  }
+
+  .route-value,
+  .city-value,
+  .support-value,
+  .summary-value,
+  .statusbar-main strong,
+  .brand-title,
+  .clock-time {
+    text-shadow: none;
+  }
 }
 
 @media (min-width: 1800px) {
