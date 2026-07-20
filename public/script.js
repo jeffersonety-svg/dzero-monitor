@@ -278,7 +278,7 @@
 
     if (letterNumberMatch) {
       const routeNumber = Number(letterNumberMatch[2]);
-      return `${letterNumberMatch[1].toUpperCase()} ${routeNumber}`;
+      return numberToPortuguese(routeNumber);
     }
 
     if (!/^\d+$/.test(normalized)) {
@@ -302,7 +302,7 @@
       return "";
     }
 
-    return `R ${routeText}. Cidade ${cityText}.`;
+    return `Rota ${routeText}. Cidade ${cityText}.`;
   }
 
   function speakTextNow(text, options = {}) {
@@ -316,7 +316,15 @@
     utterance.rate = options.rate ?? 0.98;
     utterance.pitch = options.pitch ?? 1.0;
     utterance.volume = options.volume ?? 1.0;
+    utterance.onstart = () => {
+      elements.routePanel.classList.remove("awaiting-voice");
+      elements.routePanel.classList.add("voice-playing");
+    };
+    utterance.onend = () => {
+      elements.routePanel.classList.remove("voice-playing", "awaiting-voice");
+    };
     utterance.onerror = () => {
+      elements.routePanel.classList.remove("voice-playing", "awaiting-voice");
       if (options.onError) {
         options.onError();
       }
@@ -362,11 +370,14 @@
     const announcement = buildAnnouncement(snapshot);
     const announcementKey = `${snapshot?.rota}|${snapshot?.cidade}|${snapshot?.cep}|${snapshot?.hora}`;
 
-    if (!announcement || runtimeState.lastAnnouncementKey === announcementKey) {
+    if (!announcement) {
       return;
     }
 
     runtimeState.preferredVoice = runtimeState.preferredVoice || selectPreferredVoice();
+    elements.routePanel.classList.add("awaiting-voice");
+    runtimeState.pendingAnnouncement = null;
+    window.clearTimeout(runtimeState.speechRetryTimer);
 
     if (!runtimeState.preferredVoice && speech.getVoices().length === 0) {
       runtimeState.pendingAnnouncement = { snapshot, announcementKey };
@@ -374,14 +385,12 @@
     }
 
     try {
+      runtimeState.lastAnnouncementKey = announcementKey;
       speech.resume();
 
       const onSpeechError = () => {
         runtimeState.lastAnnouncementKey = "";
       };
-
-      runtimeState.lastAnnouncementKey = announcementKey;
-      runtimeState.pendingAnnouncement = null;
 
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
@@ -392,6 +401,7 @@
     } catch (_error) {
       runtimeState.lastAnnouncementKey = "";
       runtimeState.pendingAnnouncement = { snapshot, announcementKey };
+      elements.routePanel.classList.remove("voice-playing");
     }
   }
 
@@ -427,6 +437,8 @@
     elements.rota.classList.remove("is-updated");
     elements.cidade.classList.remove("is-updated");
     elements.cidadeCardBox.classList.remove("is-updated");
+
+    elements.routePanel.classList.add("awaiting-voice");
   }
 
   function applySummary(summary) {
