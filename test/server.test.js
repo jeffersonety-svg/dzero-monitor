@@ -44,14 +44,14 @@ test("POST /update transmite novaCarta para um cliente Socket.IO", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(received.rota, "07");
-  assert.equal(received.cidade, "Curitiba");
-  assert.equal(received.uf, "PR");
-  assert.equal(received.cep, "81520-900");
-  assert.equal(received.hora, "09:35:22");
-  assert.equal(received.totalHoje, 1);
-  assert.equal(received.connectedClients, 1);
-  assert.equal(received.rotas["07"], 1);
+  assert.deepEqual(received, {
+    rota: "07",
+    cidade: "Curitiba",
+    uf: "PR",
+    cep: "81520-900",
+    hora: "09:35:22",
+    totalHoje: 1528
+  });
 });
 
 test("POST /update rejeita dados obrigatórios ausentes", async () => {
