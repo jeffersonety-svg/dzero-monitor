@@ -455,30 +455,16 @@ body.pending .monitor {
   color: var(--muted-strong);
 }
 
-.main-card.is-updated,
-.main-panel.is-updated,
-.topbar-chip.is-updated {
-  animation: cardFlash 100ms ease;
-}
-
 .route-value.is-updated {
-  animation:
-    routeEntry 100ms cubic-bezier(0.16, 1, 0.3, 1),
-    textGlow 100ms ease;
-  transform-origin: left center;
+  text-shadow: 0 0 18px rgba(0, 230, 118, 0.22);
 }
 
 #cidade.is-updated {
-  animation:
-    cityEntry 100ms cubic-bezier(0.16, 1, 0.3, 1),
-    textGlow 100ms ease;
-  transform-origin: left center;
+  text-shadow: 0 0 18px rgba(0, 230, 118, 0.18);
 }
 
 .city-card.is-updated {
-  animation:
-    cardFlash 100ms ease,
-    cityPanelLift 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 0 1px rgba(0, 230, 118, 0.18), 0 0 22px rgba(0, 230, 118, 0.1);
 }
 
 body.pending .route-value,
@@ -492,89 +478,6 @@ body.pending .status-tag {
   color: var(--danger);
 }
 
-@keyframes cardFlash {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.22);
-    border-color: rgba(0, 230, 118, 0.22);
-  }
-
-  55% {
-    box-shadow: 0 0 0 2px rgba(0, 230, 118, 0.24), 0 0 28px rgba(0, 230, 118, 0.18);
-    border-color: rgba(0, 230, 118, 0.36);
-  }
-
-  100% {
-    box-shadow: none;
-  }
-}
-
-@keyframes routeEntry {
-  0% {
-    opacity: 0;
-    transform: translateY(20px) scale(0.92);
-    letter-spacing: -0.01em;
-  }
-
-  58% {
-    opacity: 1;
-    transform: translateY(0) scale(1.035);
-    letter-spacing: -0.055em;
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    letter-spacing: -0.05em;
-  }
-}
-
-@keyframes cityEntry {
-  0% {
-    opacity: 0;
-    transform: translateY(24px) scale(0.96);
-    filter: blur(8px);
-  }
-
-  60% {
-    opacity: 1;
-    transform: translateY(0) scale(1.02);
-    filter: blur(0);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
-@keyframes cityPanelLift {
-  0% {
-    transform: translateY(14px);
-  }
-
-  55% {
-    transform: translateY(-3px);
-  }
-
-  100% {
-    transform: translateY(0);
-  }
-}
-
-@keyframes textGlow {
-  0% {
-    text-shadow: 0 0 0 rgba(0, 230, 118, 0);
-  }
-
-  50% {
-    text-shadow: 0 0 24px rgba(0, 230, 118, 0.28);
-  }
-
-  100% {
-    text-shadow: 0 0 0 rgba(0, 230, 118, 0);
-  }
-}
 
 @keyframes pulse {
   0% {

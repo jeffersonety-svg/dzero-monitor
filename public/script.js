@@ -3,7 +3,6 @@
 (() => {
   const STORAGE_KEY = "monitor-triagem:last-state";
   const STATUS_TIMEOUT_MS = 2000;
-  const FLASH_DURATION_MS = 100;
   const numberFormatter = new Intl.NumberFormat("pt-BR");
 
   const elements = Object.freeze({
@@ -123,7 +122,7 @@
     return `ESTAÇÃO_${systemId}_ATIVA | CARGA: ${scannerLoad}`;
   }
 
-  function setText(key, element, value, card, shouldFlash = true) {
+  function setText(key, element, value, card) {
     if (!element) {
       return false;
     }
@@ -138,24 +137,10 @@
 
     if (element.textContent !== nextValue) {
       element.textContent = nextValue;
-      if (card && shouldFlash) {
-        flashCard(card, FLASH_DURATION_MS);
-      }
       return true;
     }
 
     return false;
-  }
-
-  function flashCard(card, durationMs) {
-    if (!card) {
-      return;
-    }
-
-    card.classList.remove("is-updated");
-    void card.offsetWidth;
-    card.classList.add("is-updated");
-    window.setTimeout(() => card.classList.remove("is-updated"), durationMs);
   }
 
   function persistSnapshot() {
@@ -324,27 +309,9 @@
   }
 
   function flashRouteAndCity() {
-    window.clearTimeout(runtimeState.routeFlashTimer);
-    window.clearTimeout(runtimeState.cityFlashTimer);
-
     elements.rota.classList.remove("is-updated");
     elements.cidade.classList.remove("is-updated");
     elements.cidadeCardBox.classList.remove("is-updated");
-
-    void elements.rota.offsetWidth;
-
-    elements.rota.classList.add("is-updated");
-    elements.cidade.classList.add("is-updated");
-    elements.cidadeCardBox.classList.add("is-updated");
-
-    runtimeState.routeFlashTimer = window.setTimeout(() => {
-      elements.rota.classList.remove("is-updated");
-    }, FLASH_DURATION_MS);
-
-    runtimeState.cityFlashTimer = window.setTimeout(() => {
-      elements.cidade.classList.remove("is-updated");
-      elements.cidadeCardBox.classList.remove("is-updated");
-    }, FLASH_DURATION_MS);
   }
 
   function applySummary(summary) {
