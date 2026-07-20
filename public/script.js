@@ -43,7 +43,8 @@
     statusTimer: null,
     routeFlashTimer: null,
     cityFlashTimer: null,
-    preferredVoice: null
+    preferredVoice: null,
+    speechRetryTimer: null
   };
 
   function normalizeText(value, fallback, maxLength) {
@@ -304,7 +305,7 @@
     return `R ${routeText}. Cidade ${cityText}.`;
   }
 
-  function speakText(text, options = {}) {
+  function speakTextNow(text, options = {}) {
     if (!speech || typeof window.SpeechSynthesisUtterance !== "function") {
       return;
     }
@@ -323,6 +324,31 @@
 
     speech.resume();
     speech.speak(utterance);
+  }
+
+  function speakTextWhenReady(text, options = {}) {
+    if (!speech || typeof window.SpeechSynthesisUtterance !== "function") {
+      return;
+    }
+
+    const attemptSpeak = (attempt = 0) => {
+      const voicesReady = speech.getVoices().length > 0;
+      const isBusy = speech.speaking || speech.pending;
+
+      if (!voicesReady || isBusy) {
+        if (attempt >= (options.maxAttempts ?? 10)) {
+          return;
+        }
+
+        window.clearTimeout(runtimeState.speechRetryTimer);
+        runtimeState.speechRetryTimer = window.setTimeout(() => attemptSpeak(attempt + 1), options.retryDelayMs ?? 120);
+        return;
+      }
+
+      speakTextNow(text, options);
+    };
+
+    attemptSpeak();
   }
 
   function speakReading(snapshot) {
@@ -358,7 +384,7 @@
       // A fala acontece após o DOM ser pintado com a leitura nova.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          speakText(announcement, { rate: 0.99, onError: onSpeechError });
+          speakTextWhenReady(announcement, { rate: 0.99, onError: onSpeechError });
         });
       });
     } catch (_error) {
@@ -379,7 +405,7 @@
       return;
     }
 
-    speakReading(snapshot);
+      speakReading(snapshot);
   }
 
   function speakDiagnosticGreeting() {
@@ -391,7 +417,7 @@
 
     window.setTimeout(() => {
       runtimeState.preferredVoice = runtimeState.preferredVoice || selectPreferredVoice();
-      speakText("Voz ativada.", { rate: 1.02 });
+      speakTextWhenReady("Voz ativada.", { rate: 1.02 });
     }, 700);
   }
 
